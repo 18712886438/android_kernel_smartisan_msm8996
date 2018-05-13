@@ -8,4 +8,19 @@ config SRCARCH
 	string
 	option env="SRCARCH"
 
+config VENDOR_SMARTISAN
+	bool "SMARTISAN support"
+	help
+	  This feature enables Smartisan specific hacks
+
+config VENDOR_SMARTISAN_SURABAYA
+    bool "SMARTISAN M1 support"
+    help
+      This feature enables Smartisan M1 specific hacks
+
+config VENDOR_SMARTISAN_COLOMBO
+    bool "SMARTISAN M1L support"
+    help
+      This feature enables Smartisan M1L specific hacks
+
 source "arch/$SRCARCH/Kconfig"
