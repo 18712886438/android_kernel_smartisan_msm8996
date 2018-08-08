@@ -88,7 +88,7 @@
 
 	cd-gpios = <&tlmm 95 0x1>;
 
-	status = "ok";
+	status = "disabled";
 };
 
 &pm8994_vadc {
@@ -886,5 +886,5 @@
 };
 
 &wil6210 {
-	status = "ok";
+	status = "disabled";
 };
