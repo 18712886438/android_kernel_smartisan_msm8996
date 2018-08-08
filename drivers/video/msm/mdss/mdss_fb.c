@@ -85,8 +85,36 @@ static u32 mdss_fb_pseudo_palette[16] = {
 	0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff
 };
 
-static struct msm_mdp_interface *mdp_instance;
+#ifndef CONFIG_LCD_COLOMBO
+static u32 gamma_luminance[] = {
+	0,    9,    21,   32,   155,  203,  235,  275,
+	315,  360,  415,  463,  526,  569,  638,  718,
+	752,  851,  988,  1092, 1279, 1502, 1605, 1880,
+	2030, 2365, 2433, 2669, 3008, 3204, 3514, 3786,
+	4095
+};
+#elif defined CABL_OFF
+static u32 gamma_luminance[] = {
+	0,    3,    6,    24,   40,   61,   77,   98,
+	133,  155,  184,  206,  230,  272,  296,  336,
+	399,  467,  520,  576,  656,  729,  798,  831,
+	906,  972,  1060, 1148, 1250, 1364, 1436, 1536,
+	1637
+};
+#else
+static u32 gamma_luminance[] = {
+	0,   6,   7,    15,   25,   38,   48,    61,
+	69,  85,  108,  129,  144,  169,  185,   210,
+	248, 291, 325,  358,  409,  456,  499,   521,
+	567, 608, 663,  718,  782,  853,  898,   961,
+	1024
+};
+#endif
 
+extern void mdss_dsi_panel_ie_level_setting(struct mdss_panel_data *pdata, int level);
+
+static struct msm_mdp_interface *mdp_instance;
+static int ie_set_boot = 0;
 static int mdss_fb_register(struct msm_fb_data_type *mfd);
 static int mdss_fb_open(struct fb_info *info, int user);
 static int mdss_fb_release(struct fb_info *info, int user);
@@ -263,6 +291,10 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 	struct msm_fb_data_type *mfd = dev_get_drvdata(led_cdev->dev->parent);
 	int bl_lvl;
 
+//#ifndef CONFIG_LCD_COLOMBO
+	int temp;
+//#endif
+
 	if (mfd->boot_notification_led) {
 		led_trigger_event(mfd->boot_notification_led, 0);
 		mfd->boot_notification_led = NULL;
@@ -271,6 +303,12 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 	if (value > mfd->panel_info->brightness_max)
 		value = mfd->panel_info->brightness_max;
 
+//#ifndef CONFIG_LCD_COLOMBO
+/* set the min brightness to 15 */
+	if ((value > 0) && (value < 15))
+		value = 15;
+//#endif
+
 	/* This maps android backlight level 0 to 255 into
 	   driver backlight level 0 to bl_max with rounding */
 	MDSS_BRIGHT_TO_BL(bl_lvl, value, mfd->panel_info->bl_max,
@@ -278,6 +316,22 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 
 	if (!bl_lvl && value)
 		bl_lvl = 1;
+
+//#ifndef CONFIG_LCD_COLOMBO
+	temp = value / 8;
+	if (value < 255)
+		bl_lvl = gamma_luminance[temp] + (gamma_luminance[temp+1] - gamma_luminance[temp]) * (value % 8) / 8;
+	else
+#ifdef CONFIG_LCD_COLOMBO
+#ifdef CABL_OFF
+		bl_lvl = 1637;
+#else
+		bl_lvl = 1024;
+#endif
+#else
+		bl_lvl = 4095;
+#endif
+//#endif
 
 	if (!IS_CALIB_MODE_BL(mfd) && (!mfd->ext_bl_ctrl || !value ||
 							!mfd->bl_level)) {
@@ -782,6 +836,46 @@ static ssize_t mdss_fb_get_dfps_mode(struct device *dev,
 	return ret;
 }
 
+static int show_ie_level = 0;
+
+static ssize_t mdss_fb_set_ie_level(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t len)
+{
+	struct fb_info *fbi = dev_get_drvdata(dev);
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)fbi->par;
+	struct mdss_panel_data *pdata;
+	u32 ie_level;
+
+	pdata = dev_get_platdata(&mfd->pdev->dev);
+	if (!pdata) {
+		pr_err("no panel connected!\n");
+		return len;
+	}
+
+	if (sscanf(buf, "%d", &ie_level) != 1) {
+		pr_err("sccanf buf error!\n");
+		return len;
+	}
+
+	if (mfd->panel_power_state != 0)
+		mdss_dsi_panel_ie_level_setting(pdata, ie_level);
+	else
+		ie_set_boot = 0;
+	show_ie_level = ie_level;
+
+	return len;
+}
+
+static ssize_t mdss_fb_get_ie_level(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	int ret;
+
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n", show_ie_level);
+
+	return ret;
+}
+
 static DEVICE_ATTR(msm_fb_type, S_IRUGO, mdss_fb_get_type, NULL);
 static DEVICE_ATTR(msm_fb_split, S_IRUGO | S_IWUSR, mdss_fb_show_split,
 					mdss_fb_store_split);
@@ -798,6 +892,8 @@ static DEVICE_ATTR(msm_fb_panel_status, S_IRUGO | S_IWUSR,
 	mdss_fb_get_panel_status, mdss_fb_force_panel_dead);
 static DEVICE_ATTR(msm_fb_dfps_mode, S_IRUGO | S_IWUSR,
 	mdss_fb_get_dfps_mode, mdss_fb_change_dfps_mode);
+static DEVICE_ATTR(msm_fb_ie_level, S_IRUGO | S_IWUSR,
+	mdss_fb_get_ie_level, mdss_fb_set_ie_level);
 static struct attribute *mdss_fb_attrs[] = {
 	&dev_attr_msm_fb_type.attr,
 	&dev_attr_msm_fb_split.attr,
@@ -809,6 +905,7 @@ static struct attribute *mdss_fb_attrs[] = {
 	&dev_attr_msm_fb_thermal_level.attr,
 	&dev_attr_msm_fb_panel_status.attr,
 	&dev_attr_msm_fb_dfps_mode.attr,
+	&dev_attr_msm_fb_ie_level.attr,
 	NULL,
 };
 
@@ -1600,6 +1697,12 @@ void mdss_fb_update_backlight(struct msm_fb_data_type *mfd)
 			if (mfd->mdp.ad_calc_bl)
 				(*mfd->mdp.ad_calc_bl)(mfd, temp, &temp,
 								&bl_notify);
+			if (ie_set_boot < 1)
+			{
+				pr_info("show_ie_level is %d\n", show_ie_level);
+				ie_set_boot++;
+				mdss_dsi_panel_ie_level_setting(pdata, show_ie_level);
+			}
 			if (bl_notify)
 				mdss_fb_bl_update_notify(mfd,
 					NOTIFY_TYPE_BL_AD_ATTEN_UPDATE);
@@ -1678,6 +1781,8 @@ static int mdss_fb_blank_blank(struct msm_fb_data_type *mfd,
 {
 	int ret = 0;
 	int cur_power_state, current_bl;
+	struct fb_event event;
+	event.info = mfd->fbi;
 
 	if (!mfd)
 		return -EINVAL;
@@ -1694,6 +1799,9 @@ static int mdss_fb_blank_blank(struct msm_fb_data_type *mfd,
 		pr_debug("No change in power state\n");
 		return 0;
 	}
+
+	if (mfd->index == 0)
+		fb_notifier_call_chain(LCD_EVENT_OFF_START, &event);
 
 	mutex_lock(&mfd->update.lock);
 	mfd->update.type = NOTIFY_TYPE_SUSPEND;
@@ -1727,6 +1835,9 @@ static int mdss_fb_blank_blank(struct msm_fb_data_type *mfd,
 	mfd->op_enable = true;
 	complete(&mfd->power_off_comp);
 
+	if (mfd->index == 0)
+		fb_notifier_call_chain(LCD_EVENT_OFF_END, &event);
+
 	return ret;
 }
 
@@ -1734,6 +1845,8 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 {
 	int ret = 0;
 	int cur_power_state;
+	struct fb_event event;
+	event.info = mfd->fbi;
 
 	if (!mfd)
 		return -EINVAL;
@@ -1756,6 +1869,9 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 		pr_debug("No change in power state\n");
 		return 0;
 	}
+
+	if (mfd->index == 0)
+		fb_notifier_call_chain(LCD_EVENT_ON_START, &event);
 
 	if (mfd->mdp.on_fnc) {
 		struct mdss_panel_info *panel_info = mfd->panel_info;
@@ -1813,6 +1929,9 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 		}
 		mutex_unlock(&mfd->bl_lock);
 	}
+
+	if (mfd->index == 0)
+		fb_notifier_call_chain(LCD_EVENT_ON_END, &event);
 
 error:
 	return ret;
@@ -2606,7 +2725,7 @@ static int mdss_fb_open(struct fb_info *info, int user)
 		goto pm_error;
 	}
 
-	if (!mfd->ref_cnt) {
+	if ((!mfd->ref_cnt) && (mfd->index)) {  //fb0 do not blank here
 		result = mdss_fb_blank_sub(FB_BLANK_UNBLANK, info,
 					   mfd->op_enable);
 		if (result) {
@@ -2727,7 +2846,12 @@ static int mdss_fb_release_all(struct fb_info *info, bool release_all)
 
 static int mdss_fb_release(struct fb_info *info, int user)
 {
-	return mdss_fb_release_all(info, false);
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
+
+	if (mfd->index)  //only for wfd, fb0 do not release here
+		return mdss_fb_release_all(info, false);
+	else
+		return 0;
 }
 
 static void mdss_fb_power_setting_idle(struct msm_fb_data_type *mfd)
@@ -4023,6 +4147,20 @@ end:
 	return ret;
 }
 
+static int mdss_fb_ie_setting(struct mdss_panel_data *pdata, void __user *p)
+{
+	int ie_level;
+	int ret;
+
+	ret = copy_from_user(&ie_level, p, sizeof(ie_level));
+	if (ret)
+		return ret;
+	if(ie_set_boot != 0)
+		mdss_dsi_panel_ie_level_setting(pdata, ie_level);
+	show_ie_level = ie_level;
+	return 0;
+}
+
 static int mdss_fb_set_lut(struct fb_info *info, void __user *p)
 {
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
@@ -4689,6 +4827,10 @@ int mdss_fb_do_ioctl(struct fb_info *info, unsigned int cmd,
 
 	case MSMFB_ASYNC_POSITION_UPDATE:
 		ret = mdss_fb_async_position_update_ioctl(info, argp);
+		break;
+
+	case SMARTISAN_IE_SET:
+		mdss_fb_ie_setting(pdata, argp);
 		break;
 
 	default:
