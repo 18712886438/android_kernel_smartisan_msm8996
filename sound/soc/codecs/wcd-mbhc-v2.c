@@ -17,6 +17,7 @@
 #include <linux/device.h>
 #include <linux/printk.h>
 #include <linux/ratelimit.h>
+#include <linux/debugfs.h>
 #include <linux/list.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
@@ -578,7 +579,7 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 				~WCD_MBHC_JACK_BUTTON_MASK;
 		}
 
-		if (mbhc->micbias_enable) {
+		if (mbhc->micbias_enable || (mbhc->current_plug != MBHC_PLUG_TYPE_HEADPHONE)) {
 			if (mbhc->mbhc_cb->mbhc_micbias_control)
 				mbhc->mbhc_cb->mbhc_micbias_control(
 						codec, MIC_BIAS_2,
@@ -1422,9 +1423,13 @@ enable_supply:
 		wcd_enable_mbhc_supply(mbhc, plug_type);
 exit:
 	if (mbhc->mbhc_cb->mbhc_micbias_control &&
-	    !mbhc->micbias_enable)
+		(!mbhc->micbias_enable &&
+		(mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE ||
+			mbhc->current_plug == MBHC_PLUG_TYPE_NONE)))
 		mbhc->mbhc_cb->mbhc_micbias_control(codec, MIC_BIAS_2,
 						    MICB_DISABLE);
+	else
+		pr_debug("%s: Need not disable MIC_BIAS_2.\n", __func__);
 	if (mbhc->mbhc_cb->micbias_enable_status) {
 		micbias1 = mbhc->mbhc_cb->micbias_enable_status(mbhc,
 								MIC_BIAS_1);
@@ -1621,15 +1626,30 @@ static irqreturn_t wcd_mbhc_mech_plug_detect_irq(int irq, void *data)
 {
 	int r = IRQ_HANDLED;
 	struct wcd_mbhc *mbhc = data;
+	bool detection_type;
+	int ms_delay = 0;
 
-	pr_debug("%s: enter\n", __func__);
+	pr_debug("%s: enter.\n", __func__);
+
+	if (cancel_delayed_work_sync(&mbhc->mbhc_deal_with_insert_dwork))
+		mbhc->mbhc_cb->lock_sleep(mbhc, false);
+
+	WCD_MBHC_RSC_LOCK(mbhc);
+	WCD_MBHC_REG_READ(WCD_MBHC_MECH_DETECTION_TYPE, detection_type);
+	WCD_MBHC_RSC_UNLOCK(mbhc);
+
+	pr_debug("detection_type: %d\n", detection_type);
+
+	if (detection_type == 1) // insert detection
+		ms_delay = 600;
+	else // remove detection
+		ms_delay = 0;
+
 	if (unlikely((mbhc->mbhc_cb->lock_sleep(mbhc, true)) == false)) {
 		pr_warn("%s: failed to hold suspend\n", __func__);
 		r = IRQ_NONE;
 	} else {
-		/* Call handler */
-		wcd_mbhc_swch_irq_handler(mbhc);
-		mbhc->mbhc_cb->lock_sleep(mbhc, false);
+		schedule_delayed_work(&mbhc->mbhc_deal_with_insert_dwork, msecs_to_jiffies(ms_delay));
 	}
 	pr_debug("%s: leave %d\n", __func__, r);
 	return r;
@@ -1893,6 +1913,23 @@ static void wcd_btn_lpress_fn(struct work_struct *work)
 	mbhc->mbhc_cb->lock_sleep(mbhc, false);
 }
 
+static void wcd_deal_with_insert_fn(struct work_struct *work)
+{
+	struct delayed_work *dwork;
+	struct wcd_mbhc *mbhc;
+
+	pr_debug("%s: Enter\n", __func__);
+
+	dwork = to_delayed_work(work);
+	mbhc = container_of(dwork, struct wcd_mbhc, mbhc_deal_with_insert_dwork);
+
+	/* Call handler */
+	wcd_mbhc_swch_irq_handler(mbhc);
+
+	pr_debug("%s: leave\n", __func__);
+	mbhc->mbhc_cb->lock_sleep(mbhc, false);
+}
+
 static bool wcd_mbhc_fw_validate(const void *data, size_t size)
 {
 	u32 cfg_offset;
@@ -1993,6 +2030,16 @@ static irqreturn_t wcd_mbhc_release_handler(int irq, void *data)
 	 * headset not headphone.
 	 */
 	if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE) {
+		/*
+		 * 4-pole headset slow insert, first report headphone, then headset.
+		 * Headset need micbias2 to be powered on.
+		 */
+		if (mbhc->mbhc_cb->mbhc_micbias_control)
+			mbhc->mbhc_cb->mbhc_micbias_control(mbhc->codec, MIC_BIAS_2,
+				MICB_ENABLE);
+		else
+			wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_MB);
+
 		wcd_mbhc_find_plug_and_report(mbhc, MBHC_PLUG_TYPE_HEADSET);
 		goto exit;
 
@@ -2230,6 +2277,54 @@ static void wcd_mbhc_fw_read(struct work_struct *work)
 	(void) wcd_mbhc_initialise(mbhc);
 }
 
+#ifdef CONFIG_DEBUG_FS
+ssize_t wcd_mbhc_debug_read(struct file *file, char __user *buf,
+			      size_t count, loff_t *pos)
+{
+	const int size = 768;
+	char buffer[size];
+	int n = 0;
+	struct wcd_mbhc *mbhc = file->private_data;
+
+	n = scnprintf(buffer, size - n, "Insert detect insert = %d\n",
+		      mbhc->hph_status);
+	buffer[n] = 0;
+
+	return simple_read_from_buffer(buf, count, pos, buffer, n);
+}
+
+static int codec_debug_open(struct inode *inode, struct file *file)
+{
+	file->private_data = inode->i_private;
+	return 0;
+}
+
+static const struct file_operations mbhc_debug_ops = {
+	.open = codec_debug_open,
+	.read = wcd_mbhc_debug_read,
+};
+
+static void wcd_init_debugfs(struct wcd_mbhc *mbhc)
+{
+	mbhc->debugfs_mbhc =
+	    debugfs_create_file("wcd_mbhc", S_IFREG | S_IRUGO,
+				NULL, mbhc, &mbhc_debug_ops);
+}
+
+static void wcd_cleanup_debugfs(struct wcd_mbhc *mbhc)
+{
+	debugfs_remove(mbhc->debugfs_mbhc);
+}
+#else
+static void wcd_init_debugfs(struct wcd_mbhc *mbhc)
+{
+}
+
+static void wcd_cleanup_debugfs(struct wcd_mbhc *mbhc)
+{
+}
+#endif
+
 int wcd_mbhc_set_keycode(struct wcd_mbhc *mbhc)
 {
 	enum snd_jack_types type;
@@ -2450,6 +2545,7 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 		INIT_DELAYED_WORK(&mbhc->mbhc_firmware_dwork,
 				  wcd_mbhc_fw_read);
 		INIT_DELAYED_WORK(&mbhc->mbhc_btn_dwork, wcd_btn_lpress_fn);
+		INIT_DELAYED_WORK(&mbhc->mbhc_deal_with_insert_dwork, wcd_deal_with_insert_fn);
 	}
 	mutex_init(&mbhc->hphl_pa_lock);
 	mutex_init(&mbhc->hphr_pa_lock);
@@ -2543,6 +2639,8 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 		goto err_hphr_ocp_irq;
 	}
 
+	wcd_init_debugfs(mbhc);
+
 	pr_debug("%s: leave ret %d\n", __func__, ret);
 	return ret;
 
@@ -2586,6 +2684,7 @@ void wcd_mbhc_deinit(struct wcd_mbhc *mbhc)
 	if (mbhc->mbhc_cb && mbhc->mbhc_cb->register_notifier)
 		mbhc->mbhc_cb->register_notifier(codec, &mbhc->nblock, false);
 	mutex_destroy(&mbhc->codec_resource_lock);
+	wcd_cleanup_debugfs(mbhc);
 }
 EXPORT_SYMBOL(wcd_mbhc_deinit);
 

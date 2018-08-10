@@ -428,6 +428,10 @@ struct wcd_mbhc {
 	struct mutex hphr_pa_lock;
 
 	unsigned long intr_status;
+#ifdef CONFIG_DEBUG_FS
+	struct dentry *debugfs_mbhc;
+#endif
+	struct delayed_work mbhc_deal_with_insert_dwork;
 };
 #define WCD_MBHC_CAL_SIZE(buttons, rload) ( \
 	sizeof(struct wcd_mbhc_general_cfg) + \
