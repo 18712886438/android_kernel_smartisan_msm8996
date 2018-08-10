@@ -785,6 +785,8 @@ static int qusb_phy_init(struct usb_phy *phy)
 
 		pr_debug("%s(): Programming TUNE2 parameter as:%x\n", __func__,
 				qphy->tune2_val);
+        qphy->tune2_val = ((qphy->tune2_val & 0xf) | (0x8 << 4));
+
 		writel_relaxed(qphy->tune2_val,
 				qphy->base + QUSB2PHY_PORT_TUNE2);
 	}

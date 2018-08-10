@@ -2289,6 +2289,7 @@ composite_suspend(struct usb_gadget *gadget)
 	struct usb_composite_dev	*cdev = get_gadget_data(gadget);
 	struct usb_function		*f;
 	unsigned long			flags;
+	unsigned power = 2;
 
 	/* REVISIT:  should we have config level
 	 * suspend/resume callbacks?
@@ -2307,7 +2308,17 @@ composite_suspend(struct usb_gadget *gadget)
 	cdev->suspended = 1;
 	spin_unlock_irqrestore(&cdev->lock, flags);
 
-	usb_gadget_vbus_draw(gadget, 2);
+	if (cdev->config) {
+		power = cdev->config->MaxPower ?
+			cdev->config->MaxPower :
+			CONFIG_USB_GADGET_VBUS_DRAW;
+		DBG(cdev, "[oem][usb] valid configuration: draw vbus: %d"
+				"mA\n", power);
+	} else {
+		DBG(cdev, "[oem][usb] invalid configuration: draw vbus: %d"
+				"mA\n", power);
+	}
+	usb_gadget_vbus_draw(gadget, power);
 }
 
 static void
