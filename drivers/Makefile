@@ -170,3 +170,4 @@ obj-$(CONFIG_ESOC)		+= esoc/
 obj-$(CONFIG_BIF)		+= bif/
 obj-$(CONFIG_P61_NFC)	+= ese-nxp/
 obj-$(CONFIG_SENSORS_SSC)	+= sensors/
+obj-y +=fingerprint/
