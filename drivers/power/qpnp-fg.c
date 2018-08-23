@@ -35,6 +35,8 @@
 #include <linux/string_helpers.h>
 #include <linux/alarmtimer.h>
 #include <linux/qpnp/qpnp-revid.h>
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 
 /* Register offsets */
 
@@ -190,6 +192,9 @@ struct fg_cc_soc_data {
 	int	delta_soc;
 };
 
+static struct proc_dir_entry *proc_dir, *proc_file;
+static bool ready_loaded = false;
+
 /* FG_MEMIF setting index */
 enum fg_mem_setting_index {
 	FG_MEM_SOFT_COLD = 0,
@@ -310,7 +315,7 @@ static struct fg_mem_data fg_backup_regs[FG_BACKUP_MAX] = {
 	BACKUP(MAH_TO_SOC,	0x4A0,   0,      4,     -EINVAL),
 };
 
-static int fg_debug_mask;
+static int fg_debug_mask = 0x44;
 module_param_named(
 	debug_mask, fg_debug_mask, int, S_IRUSR | S_IWUSR
 );
@@ -325,7 +330,12 @@ module_param_named(
 	first_est_dump, fg_est_dump, int, S_IRUSR | S_IWUSR
 );
 
-static char *fg_batt_type;
+#ifdef CONFIG_BATTERY_COLOMBO
+static char *fg_batt_type = "smartisan_4000mah";
+#else
+static char *fg_batt_type = "smartisan_3000mah";
+#endif
+
 module_param_named(
 	battery_type, fg_batt_type, charp, S_IRUSR | S_IWUSR
 );
@@ -564,6 +574,7 @@ struct fg_chip {
 	int			actual_cap_uah;
 	int			status;
 	int			prev_status;
+	int			prev_soc;
 	int			health;
 	enum fg_batt_aging_mode	batt_aging_mode;
 	struct alarm		hard_jeita_alarm;
@@ -2204,7 +2215,7 @@ static int get_prop_capacity(struct fg_chip *chip)
 	if (chip->soc_empty) {
 		if (fg_debug_mask & FG_POWER_SUPPLY)
 			pr_info_ratelimited("capacity: %d, EMPTY\n",
-					EMPTY_CAPACITY);
+					EMPTY_CAPACITY * SOC_RESTART);
 		return EMPTY_CAPACITY;
 	}
 
@@ -2646,12 +2657,15 @@ out:
 }
 
 #define SRAM_TIMEOUT_MS			3000
+#define LOW_BATT_SOC            10
+static bool is_input_present(struct fg_chip *chip);
+
 static void update_sram_data_work(struct work_struct *work)
 {
 	struct fg_chip *chip = container_of(work,
 				struct fg_chip,
 				update_sram_data.work);
-	int resched_ms, ret;
+	int resched_ms, ret, capacity;
 	bool tried_again = false;
 	int rc = 0;
 
@@ -2674,6 +2688,14 @@ wait:
 		goto out;
 	}
 	rc = update_sram_data(chip, &resched_ms);
+
+    /* Workaround for avoiding appear SOC transition. */
+    capacity = get_prop_capacity(chip);
+	if (capacity != chip->prev_soc) {
+		chip->prev_soc = capacity;
+		if (chip->power_supply_registered)
+			power_supply_changed(&chip->bms_psy);
+	}
 
 out:
 	if (!rc)
@@ -6190,6 +6212,46 @@ fail:
 	return -EINVAL;
 }
 
+static int proc_batt_ready_show(struct seq_file *m, void *v)
+{
+	int len;
+	len = seq_printf(m, "%s\n", ready_loaded? "1":"0");
+	return len;
+}
+
+static int proc_batt_ready_open(struct inode *inode, struct file *file)
+{
+    return single_open(file, proc_batt_ready_show, NULL);
+}
+
+static const struct file_operations proc_batt_ready_fops = {
+     .owner      = THIS_MODULE,
+     .open       = proc_batt_ready_open,
+     .read       = seq_read,
+     .llseek     = seq_lseek,
+     .release    = single_release,
+};
+
+static int init_proc_load_profile(void)
+{
+	int ret = 0;
+
+	proc_dir=proc_mkdir("batt_load", NULL);
+	if (proc_dir == NULL){
+		ret = -ENOMEM;
+		return ret;
+	}
+
+	proc_file = proc_create("ready", 0, proc_dir, &proc_batt_ready_fops);
+	if (proc_file == NULL) {
+		remove_proc_entry("batt_load", NULL);
+		ret = -ENOMEM;
+		return ret;
+	}
+
+	return 0;
+}
+
 #define FG_PROFILE_LEN			128
 #define PROFILE_COMPARE_LEN		32
 #define THERMAL_COEFF_ADDR		0x444
@@ -6462,6 +6524,7 @@ done:
 	chip->first_profile_loaded = true;
 	chip->profile_loaded = true;
 	chip->soc_reporting_ready = true;
+	ready_loaded = true; //flag to load battery profile for healthd.
 	chip->battery_missing = is_battery_missing(chip);
 	update_chg_iterm(chip);
 	update_cc_cv_setpoint(chip);
@@ -8585,6 +8648,8 @@ static int fg_probe(struct spmi_device *spmi)
 
 	chip->spmi = spmi;
 	chip->dev = &(spmi->dev);
+
+	init_proc_load_profile();
 
 	wakeup_source_init(&chip->empty_check_wakeup_source.source,
 			"qpnp_fg_empty_check");
