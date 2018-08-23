@@ -1617,11 +1617,13 @@ static int32_t msm_cci_write(struct v4l2_subdev *sd,
 		break;
 	case MSM_CCI_I2C_WRITE:
 	case MSM_CCI_I2C_WRITE_SEQ:
+		mutex_lock(&cci_master_info->mutex_o);
 		for (i = 0; i < NUM_QUEUES; i++) {
 			if (mutex_trylock(&cci_master_info->mutex_q[i])) {
 				rc = msm_cci_i2c_write(sd, c_ctrl, i,
 					MSM_SYNC_DISABLE);
 				mutex_unlock(&cci_master_info->mutex_q[i]);
+				mutex_unlock(&cci_master_info->mutex_o);
 				return rc;
 			}
 		}
@@ -1629,6 +1631,7 @@ static int32_t msm_cci_write(struct v4l2_subdev *sd,
 		rc = msm_cci_i2c_write(sd, c_ctrl,
 			PRIORITY_QUEUE, MSM_SYNC_DISABLE);
 		mutex_unlock(&cci_master_info->mutex_q[PRIORITY_QUEUE]);
+		mutex_unlock(&cci_master_info->mutex_o);
 		break;
 	case MSM_CCI_I2C_WRITE_ASYNC:
 		rc = msm_cci_i2c_write_async(sd, c_ctrl,
@@ -1644,17 +1647,38 @@ static int32_t msm_cci_config(struct v4l2_subdev *sd,
 	struct msm_camera_cci_ctrl *cci_ctrl)
 {
 	int32_t rc = 0;
+	struct cci_device *cci_dev;
+	enum cci_i2c_master_t master;
+	struct msm_camera_cci_master_info *cci_master_info;
+
 	CDBG("%s line %d cmd %d\n", __func__, __LINE__,
 		cci_ctrl->cmd);
+	cci_dev = v4l2_get_subdevdata(sd);
+	if (!cci_dev || !cci_ctrl) {
+		pr_err("%s:%d failed: invalid params %p %p\n", __func__,
+			__LINE__, cci_dev, cci_ctrl);
+		rc = -EINVAL;
+		return rc;
+	}
+
+	master = cci_ctrl->cci_info->cci_i2c_master;
+	cci_master_info = &cci_dev->cci_master_info[master];
+
 	switch (cci_ctrl->cmd) {
 	case MSM_CCI_INIT:
+		mutex_lock(&cci_master_info->mutex_o);
 		rc = msm_cci_init(sd, cci_ctrl);
+		mutex_unlock(&cci_master_info->mutex_o);
 		break;
 	case MSM_CCI_RELEASE:
+		//mutex_lock(&cci_master_info->mutex_o);
 		rc = msm_cci_release(sd);
+		//mutex_unlock(&cci_master_info->mutex_o);
 		break;
 	case MSM_CCI_I2C_READ:
+		mutex_lock(&cci_master_info->mutex_o);
 		rc = msm_cci_i2c_read_bytes(sd, cci_ctrl);
+		mutex_unlock(&cci_master_info->mutex_o);
 		break;
 	case MSM_CCI_I2C_WRITE:
 	case MSM_CCI_I2C_WRITE_SEQ:
@@ -1854,6 +1878,7 @@ static void msm_cci_init_cci_params(struct cci_device *new_cci_dev)
 			spin_lock_init(&new_cci_dev->
 				cci_master_info[i].lock_q[j]);
 		}
+		mutex_init(&new_cci_dev->cci_master_info[i].mutex_o);
 	}
 	return;
 }
@@ -1964,9 +1989,13 @@ static void msm_cci_init_clk_params(struct cci_device *cci_dev)
 		else if (I2C_FAST_PLUS_MODE == count)
 			src_node = of_find_node_by_name(of_node,
 				"qcom,i2c_fast_plus_mode");
-		else
+		else if (I2C_CUSTOM_MODE == count)
 			src_node = of_find_node_by_name(of_node,
 				"qcom,i2c_custom_mode");
+		else
+			src_node = of_find_node_by_name(of_node,
+				"qcom,i2c_ois_mode");
+
 
 		rc = of_property_read_u32(src_node, "qcom,hw-thigh", &val);
 		CDBG("%s qcom,hw-thigh %d, rc %d\n", __func__, val, rc);

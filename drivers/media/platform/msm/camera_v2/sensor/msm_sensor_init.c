@@ -42,7 +42,7 @@ static const struct v4l2_subdev_internal_ops msm_sensor_init_internal_ops;
 static int msm_sensor_wait_for_probe_done(struct msm_sensor_init_t *s_init)
 {
 	int rc;
-	int tm = 10000;
+	int tm = 100000;
 	if (s_init->module_init_status == 1) {
 		CDBG("msm_cam_get_module_init_status -2\n");
 		return 0;
@@ -90,7 +90,10 @@ static int32_t msm_sensor_driver_cmd(struct msm_sensor_init_t *s_init,
 	case CFG_SINIT_PROBE_WAIT_DONE:
 		rc = msm_sensor_wait_for_probe_done(s_init);
 		break;
-
+	case CFG_SINIT_UNREGISTER:
+		pr_err("XiaYang: CFG_SINIT_UNREGISTER\n");
+		rc = msm_sensor_unregister(cfg->cfg.setting);
+		break;
 	default:
 		pr_err("default");
 		break;
