@@ -408,6 +408,7 @@
 			qcom,timing-db-mode;
 			oled-vdda-supply = <&pm8994_l19>;
 			vddio-supply = <&pm8994_l14>;
+			vddh-supply = <&pm8994_l22>;
 			lab-supply = <&lab_regulator>;
 			ibb-supply = <&ibb_regulator>;
 			qcom,mdss-mdp = <&mdss_mdp>;
@@ -532,9 +533,7 @@
 		clock-names = "mdp_core_clk", "iface_clk",
 				"core_clk", "alt_iface_clk", "extp_clk";
 
-		qcom,hdmi-tx-hpd = <&pm8994_mpps 4 0>;
 		qcom,mdss-fb-map = <&mdss_fb2>;
-		qcom,pluggable;
 
 		hdmi_audio: qcom,msm-hdmi-audio-rx {
 			compatible = "qcom,msm-hdmi-audio-codec-rx";

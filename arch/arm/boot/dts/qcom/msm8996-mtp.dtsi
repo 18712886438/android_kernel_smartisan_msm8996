@@ -11,8 +11,6 @@
  */
 
 #include "msm8996-pinctrl.dtsi"
-#include "msm8996-camera-sensor-mtp.dtsi"
-#include "msm8996-wsa881x.dtsi"
 
 / {
 	bluetooth: bt_qca6174 {
@@ -68,27 +66,6 @@
 	qcom,ice-clk-rates = <300000000 150000000>;
 	qcom,nonremovable;
 	qcom,bus-speed-mode = "HS400_1p8v", "HS200_1p8v", "DDR_1p8v";
-
-	status = "ok";
-};
-
-&sdhc_2 {
-	vdd-supply = <&pm8994_l21>;
-	qcom,vdd-voltage-level = <2950000 2950000>;
-	qcom,vdd-current-level = <200 800000>;
-
-	vdd-io-supply = <&pm8994_l13>;
-	qcom,vdd-io-voltage-level = <1800000 2950000>;
-	qcom,vdd-io-current-level = <200 22000>;
-
-	pinctrl-names = "active", "sleep";
-	pinctrl-0 = <&sdc2_clk_on  &sdc2_cmd_on &sdc2_data_on &sdc2_cd_on>;
-	pinctrl-1 = <&sdc2_clk_off &sdc2_cmd_off &sdc2_data_off &sdc2_cd_off>;
-
-	qcom,clk-rates = <400000 20000000 25000000 50000000 100000000 200000000>;
-	qcom,bus-speed-mode = "SDR12", "SDR25", "SDR50", "DDR50", "SDR104";
-
-	cd-gpios = <&tlmm 95 0x1>;
 
 	status = "ok";
 };
@@ -274,21 +251,6 @@
 	};
 };
 
-&mdss_hdmi_tx {
-	pinctrl-names = "hdmi_hpd_active", "hdmi_ddc_active", "hdmi_cec_active",
-				"hdmi_active", "hdmi_sleep";
-	pinctrl-0 = <&mdss_hdmi_hpd_active &mdss_hdmi_ddc_suspend
-						&mdss_hdmi_cec_suspend>;
-	pinctrl-1 = <&mdss_hdmi_hpd_active &mdss_hdmi_ddc_active
-						&mdss_hdmi_cec_suspend>;
-	pinctrl-2 = <&mdss_hdmi_hpd_active &mdss_hdmi_cec_active
-						&mdss_hdmi_ddc_suspend>;
-	pinctrl-3 = <&mdss_hdmi_hpd_active &mdss_hdmi_ddc_active
-						&mdss_hdmi_cec_active>;
-	pinctrl-4 = <&mdss_hdmi_hpd_suspend &mdss_hdmi_ddc_suspend
-						&mdss_hdmi_cec_suspend>;
-};
-
 &pmi8994_vadc {
 	chan@0 {
 		label = "usbin";
@@ -343,26 +305,6 @@
 
 &mdss_dsi {
 	hw-config = "split_dsi";
-};
-
-&mdss_dsi0 {
-	qcom,dsi-pref-prim-pan = <&dsi_dual_sharp_video>;
-	pinctrl-names = "mdss_default", "mdss_sleep";
-	pinctrl-0 = <&mdss_dsi_active &mdss_te_active>;
-	pinctrl-1 = <&mdss_dsi_suspend &mdss_te_suspend>;
-	qcom,platform-te-gpio = <&tlmm 10 0>;
-	qcom,platform-reset-gpio = <&tlmm 8 0>;
-	qcom,platform-bklight-en-gpio = <&pm8994_gpios 14 0>;
-};
-
-&mdss_dsi1 {
-	qcom,dsi-pref-prim-pan = <&dsi_dual_sharp_video>;
-	pinctrl-names = "mdss_default", "mdss_sleep";
-	pinctrl-0 = <&mdss_dsi_active &mdss_te_active>;
-	pinctrl-1 = <&mdss_dsi_suspend &mdss_te_suspend>;
-	qcom,platform-te-gpio = <&tlmm 10 0>;
-	qcom,platform-reset-gpio = <&tlmm 8 0>;
-	qcom,platform-bklight-en-gpio = <&pm8994_gpios 14 0>;
 };
 
 &labibb {
@@ -624,27 +566,6 @@
 
 &soc {
 	i2c@75ba000 {
-		synaptics@20 {
-			compatible = "synaptics,dsx";
-			reg = <0x20>;
-			interrupt-parent = <&tlmm>;
-			interrupts = <125 0x2008>;
-			vdd-supply = <&pm8994_l14>;
-			avdd-supply = <&pm8994_l22>;
-			pinctrl-names = "pmx_ts_active", "pmx_ts_suspend";
-			pinctrl-0 = <&ts_active>;
-			pinctrl-1 = <&ts_suspend>;
-			synaptics,display-coords = <0 0 1599 2559>;
-			synaptics,panel-coords = <0 0 1599 2703>;
-			synaptics,reset-gpio = <&tlmm 89 0x00>;
-			synaptics,irq-gpio = <&tlmm 125 0x2008>;
-			synaptics,disable-gpios;
-			synaptics,fw-name = "PR1702898-s3528t_00350002.img";
-			/* Underlying clocks used by secure touch */
-			clock-names = "iface_clk", "core_clk";
-			clocks = <&clock_gcc clk_gcc_blsp2_ahb_clk>,
-				 <&clock_gcc clk_gcc_blsp2_qup6_i2c_apps_clk>;
-		};
 	};
 
 	gen-vkeys {
@@ -655,85 +576,6 @@
 		qcom,panel-maxx = <1599>;
 		qcom,panel-maxy = <2703>;
 		qcom,key-codes = <158 139 102 217>;
-	};
-
-	gpio_keys {
-		compatible = "gpio-keys";
-		input-name = "gpio-keys";
-
-		vol_up {
-			label = "volume_up";
-			gpios = <&pm8994_gpios 2 0x1>;
-			linux,input-type = <1>;
-			linux,code = <115>;
-			gpio-key,wakeup;
-			debounce-interval = <15>;
-		};
-
-		cam_snapshot {
-			label = "cam_snapshot";
-			gpios = <&pm8994_gpios 4 0x1>;
-			linux,input-type = <1>;
-			linux,code = <766>;
-			gpio-key,wakeup;
-			debounce-interval = <15>;
-		};
-
-		cam_focus {
-			label = "cam_focus";
-			gpios = <&pm8994_gpios 5 0x1>;
-			linux,input-type = <1>;
-			linux,code = <528>;
-			gpio-key,wakeup;
-			debounce-interval = <15>;
-		};
-	};
-
-	sound-9335 {
-		qcom,model = "msm8996-tasha-mtp-snd-card";
-
-		qcom,audio-routing =
-			"AIF4 VI", "MCLK",
-			"RX_BIAS", "MCLK",
-			"MADINPUT", "MCLK",
-			"hifi amp", "LINEOUT1",
-			"hifi amp", "LINEOUT2",
-			"AMIC2", "MIC BIAS2",
-			"MIC BIAS2", "Headset Mic",
-			"AMIC3", "MIC BIAS2",
-			"MIC BIAS2", "ANCRight Headset Mic",
-			"AMIC4", "MIC BIAS2",
-			"MIC BIAS2", "ANCLeft Headset Mic",
-			"AMIC5", "MIC BIAS3",
-			"MIC BIAS3", "Handset Mic",
-			"AMIC6", "MIC BIAS4",
-			"MIC BIAS4", "Analog Mic6",
-			"DMIC0", "MIC BIAS1",
-			"MIC BIAS1", "Digital Mic0",
-			"DMIC1", "MIC BIAS1",
-			"MIC BIAS1", "Digital Mic1",
-			"DMIC2", "MIC BIAS3",
-			"MIC BIAS3", "Digital Mic2",
-			"DMIC3", "MIC BIAS3",
-			"MIC BIAS3", "Digital Mic3",
-			"DMIC4", "MIC BIAS4",
-			"MIC BIAS4", "Digital Mic4",
-			"DMIC5", "MIC BIAS4",
-			"MIC BIAS4", "Digital Mic5",
-			"SpkrLeft IN", "SPK1 OUT",
-			"SpkrRight IN", "SPK2 OUT";
-
-		qcom,hdmi-audio-rx;
-		asoc-codec = <&stub_codec>, <&hdmi_audio>;
-		asoc-codec-names = "msm-stub-codec.1", "msm-hdmi-audio-codec-rx";
-		qcom,hph-en1-gpio = <&pmi8994_gpios 10 0>;
-		qcom,hph-en0-gpio = <&pm8994_gpios 13 0>;
-		qcom,us-euro-gpios = <&pm8994_mpps 2 0>;
-		qcom,wsa-max-devs = <2>;
-		qcom,wsa-devs = <&wsa881x_211>, <&wsa881x_212>,
-				<&wsa881x_213>, <&wsa881x_214>;
-		qcom,wsa-aux-dev-prefix = "SpkrLeft", "SpkrRight",
-					  "SpkrLeft", "SpkrRight";
 	};
 };
 
@@ -834,6 +676,17 @@
 		status = "okay";
 	};
 
+	gpio@d000 { /* GPIO 17 - DIVCLK3 */
+		qcom,mode = <1>;
+		qcom,output-type = <0>;
+		qcom,pull = <5>;
+		qcom,vin-sel = <2>;
+		qcom,out-strength = <1>;
+		qcom,src-sel = <2>;
+		qcom,master-en = <1>;
+		status = "okay";
+	};
+
 	gpio@d100 { /* GPIO 18 - Rome Sleep Clock */
 		qcom,mode = <1>;		/* Digital output */
 		qcom,output-type = <0>;		/* CMOS logic */
@@ -873,55 +726,4 @@
 		compatible = "atmel,24c32";
 		reg = <0x51>;
 	};
-};
-
-&i2c_7 {
-	silabs4705@11 { /* SiLabs FM chip, slave id 0x11*/
-		status = "ok";
-		compatible = "silabs,si4705";
-		reg = <0x11>;
-		vdd-supply = <&pm8994_s4>;
-		silabs,vdd-supply-voltage = <1800000 1800000>;
-		va-supply = <&rome_vreg>;
-		silabs,va-supply-voltage = <3300000 3300000>;
-		pinctrl-names = "pmx_fm_active","pmx_fm_suspend";
-		pinctrl-0 = <&fm_int_active &fm_status_int_active &fm_rst_active>;
-		pinctrl-1 = <&fm_int_suspend &fm_status_int_suspend &fm_rst_suspend>;
-		silabs,reset-gpio = <&tlmm 39 0>;
-		silabs,int-gpio = <&tlmm 38 0>;
-		silabs,status-gpio = <&tlmm 78 0>;
-		#address-cells = <0>;
-		interrupts = <0 1>;
-		#interrupt-cells = <1>;
-		interrupt-map-mask = <0xffffffff>;
-		interrupt-map = <
-				  0 &tlmm 38 2
-				  1 &tlmm 78 1
-				>;
-		interrupt-names = "silabs_fm_int", "silabs_fm_status_int";
-	};
-};
-
-&i2c_8 { /* BLSP2 QUP2 */
-	nq@28 {
-		compatible = "qcom,nq-nci";
-		reg = <0x28>;
-		qcom,nq-irq = <&tlmm 9 0x00>;
-		qcom,nq-ven = <&tlmm 12 0x00>;
-		qcom,nq-firm = <&pm8994_gpios 7 0x00>;
-		qcom,nq-clkreq = <&pm8994_gpios 10 0x00>;
-		interrupt-parent = <&tlmm>;
-		qcom,clk-src = "BBCLK2";
-		interrupts = <9 0>;
-		interrupt-names = "nfc_irq";
-		pinctrl-names = "nfc_active", "nfc_suspend";
-		pinctrl-0 = <&nfc_int_active &nfc_disable_active>;
-		pinctrl-1 = <&nfc_int_suspend &nfc_disable_suspend>;
-		clocks = <&clock_gcc clk_bb_clk2_pin>;
-		clock-names = "ref_clk";
-	};
-};
-
-&wil6210 {
-	status = "ok";
 };

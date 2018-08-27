@@ -328,6 +328,10 @@
 			qcom,fg-cc-cv-threshold-mv = <4340>;
 			qcom,pmic-revid = <&pmi8994_revid>;
 			qcom,capacity-learning-feedback;
+			qcom,warm-bat-decidegc = <450>;
+			qcom,cool-bat-decidegc = <100>;
+			qcom,hot-bat-decidegc = <550>;
+			qcom,cold-bat-decidegc = <0>;
 
 			qcom,fg-soc@4000 {
 				status = "okay";
@@ -543,10 +547,11 @@
 			qcom,dim-mode = "hybrid";
 			qcom,hyb-thres = <625>;
 			qcom,sync-dly-us = <800>;
-			qcom,fs-curr-ua = <25000>;
+			qcom,fs-curr-ua = <20000>;
 			qcom,cons-sync-write-delay-us = <1000>;
-			qcom,led-strings-list = [00 01 02 03];
+			qcom,led-strings-list = [00 01];
 			qcom,en-ext-pfet-sc-pro;
+			qcom,en-cabc;
 		};
 
 		pmi8994_haptics: qcom,haptic@c000 {
@@ -592,8 +597,16 @@
 				qcom,max-current = <12>;
 				qcom,default-state = "off";
 				linux,name = "red";
-				linux,default-trigger =
-					"battery-charging";
+				//linux,default-trigger =
+				//	"battery-charging";
+				qcom,use-blink;
+				qcom,start-idx = <1>;
+				qcom,ramp-step-ms = <80>;
+				qcom,idx-len = <23>;
+				qcom,duty-pcts = [
+					03 06 0C 14 1C 22 29 1E 17 13 10
+					0E 0B 08 04 02 00 00 00 00 00 00
+					00];
 			};
 
 			green_led: qcom,rgb_1 {
@@ -605,7 +618,7 @@
 				qcom,max-current = <12>;
 				qcom,default-state = "off";
 				linux,name = "green";
-				linux,default-trigger = "battery-full";
+				//linux,default-trigger = "battery-full";
 			};
 
 			blue_led: qcom,rgb_2 {
@@ -617,7 +630,7 @@
 				qcom,max-current = <12>;
 				qcom,default-state = "off";
 				linux,name = "blue";
-				linux,default-trigger = "boot-indication";
+				//linux,default-trigger = "boot-indication";
 			};
 		};
 
