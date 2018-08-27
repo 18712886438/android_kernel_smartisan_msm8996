@@ -40,7 +40,103 @@
 		qcom,mdss-dsi-color-order = "rgb_swap_rgb";
 		qcom,mdss-dsi-underflow-color = <0xff>;
 		qcom,mdss-dsi-border-color = <0>;
-		qcom,mdss-dsi-on-command = [29 01 00 00 00 00 02 b0 00
+		qcom,mdss-mdp-transfer-time-us = <12500>;
+
+		/*
+		qcom,mdss-dsi-panel-color-temperature-command0 = [
+				29 01 00 00 00 00 14 c8 00 00 00 00 00 fc 00 00 00 00 00 fc 00 00 00 00 00 fc 00
+				29 01 00 00 00 00 2c CA 1C FC FC FC 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		*/
+		qcom,mdss-dsi-panel-color-temperature-command0 = [
+				29 01 00 00 00 00 14 c8 01 00 fe eb f0 fc 0f 00 ff f5 f7 f8 0f 00 fe f1 f0 e3 0e
+				29 01 00 00 00 00 2c CA 1C FC FC FC 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		qcom,mdss-dsi-panel-color-temperature-command1 = [
+				29 01 00 00 00 00 14 c8 01 00 fe eb f0 fc 0f 00 ff f5 f8 ee 0f 00 fe f4 f5 bf ff
+				29 01 00 00 00 00 2c CA 1C FC FC FC 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		qcom,mdss-dsi-panel-color-temperature-command2 = [
+				29 01 00 00 00 00 14 c8 01 00 fe eb f0 fc 0f 00 ff f5 f8 e9 0f 00 fe f5 f5 ab ff
+				29 01 00 00 00 00 2c CA 1C FC FC FC 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		qcom,mdss-dsi-panel-color-temperature-command3 = [
+				29 01 00 00 00 00 14 c8 01 00 fe eb f0 fc 0f 00 ff f7 f9 d5 0f 00 fd f6 f5 8a ff
+				29 01 00 00 00 00 2c CA 1C FC FC FC 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		/*copy from command4*/
+		qcom,mdss-dsi-panel-color-temperature-command4 = [
+				29 01 00 00 00 00 14 c8 01 00 fe eb f0 fc 0f 00 ff f7 f9 c9 0f 00 fe f7 f6 6b fe
+				29 01 00 00 00 00 2c CA 1C FC FC FC 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		qcom,mdss-dsi-panel-color-temperature-command5 = [
+				29 01 00 00 00 00 14 c8 01 00 fe eb f0 fc 0f 00 ff f8 fa af ff 00 fc fa f7 2e ff
+				29 01 00 00 00 00 2c CA 1C FC FC FC 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		qcom,mdss-dsi-panel-color-temperature-command6 = [
+				29 01 00 00 00 00 14 c8 01 00 fe eb f0 fc 0f 00 ff f9 f9 a3 ff 00 fa fb f5 14 ff
+				29 01 00 00 00 00 2c CA 1C FC FC FC 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		qcom,mdss-dsi-panel-color-temperature-command7 = [
+				29 01 00 00 00 00 14 c8 01 00 fe eb f0 fc 0f 00 fe f9 fa 9c ff 00 fb fa f6 00 ff
+				29 01 00 00 00 00 2c ca 1d fc fc f7 00 00 00 00 00 00 00 00 00 00 00 fe 00 00 fe 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		/*copy from command7*/
+		qcom,mdss-dsi-panel-color-temperature-command8 = [
+				29 01 00 00 00 00 14 c8 01 00 fe eb f0 fc 0f 00 fe f9 fa 9c ff 00 fb fa f6 00 ff
+				29 01 00 00 00 00 2c ca 1d fc fc f7 00 00 00 00 00 00 00 00 00 00 00 fe 00 00 fe 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		qcom,mdss-dsi-panel-color-temperature-command9 = [
+				29 01 00 00 00 00 14 c8 01 00 fe eb f0 fc 0f 00 fe f9 fa 9c ff 00 fb fa f6 00 ff
+				29 01 00 00 00 00 2c ca 1d fc f2 c0 00 00 00 00 00 00 00 00 00 00 00 f3 00 00 ef 00 fe 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		qcom,mdss-dsi-panel-color-temperature-command11 = [
+				29 01 00 00 00 00 14 c8 01 00 fe eb f0 fc 0f 00 fe f9 fa 9c ff 00 fb fa f6 00 ff
+				29 01 00 00 00 00 2c ca 1d fc c8 70 00 00 00 00 00 00 00 00 00 00 00 eb 00 00 dc 00 f2 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		qcom,mdss-dsi-panel-color-temperature-command12 = [
+				29 01 00 00 00 00 14 c8 01 00 fe eb f0 fc 0f 00 fe f9 fa 9c ff 00 fb fa f6 00 ff
+				29 01 00 00 00 00 2c ca 1d fc ae 1d 00 00 00 00 00 00 00 00 00 00 00 d8 00 00 c7 00 ed 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		qcom,mdss-dsi-panel-color-temperature-command13 = [
+                29 01 00 00 00 00 14 C8 01 00 FE EB F0 FC 0F 00 FF F9 F8 7F FF 00 FB FA F6 00 0F
+                29 01 00 00 00 00 2c CA 1D FC CC 00 00 00 00 00 00 00 00 00 00 00 00 C3 00 00 B0 00 E6 00 FF FF FF FF E6 AE FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		qcom,mdss-dsi-panel-color-temperature-command14 = [
+                29 01 00 00 00 00 14 C8 01 00 FE EB F0 FC 0F 00 FF F9 F8 7F FF 00 FB FA F6 00 0F
+                29 01 00 00 00 00 2c CA 1D FC DD 00 00 00 00 00 00 00 00 00 00 00 00 B2 00 00 9A 00 DE 00 FF FF FF FF DD 99 FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+		qcom,mdss-dsi-panel-color-temperature-command_restore = [
+				29 01 00 00 00 00 14 c8 00 00 00 00 00 fc 00 00 00 00 00 fc 00 00 00 00 00 fc 00
+				29 01 00 00 00 00 2c CA 1C FC FC FC 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00];
+
+		qcom,mdss-dsi-panel-sre-weak-level = [
+			29 01 00 00 00 00 02 B0 04 
+			39 01 00 00 00 00 02 51 ff
+			39 01 00 00 00 00 02 55 F2
+			29 01 00 00 00 00 08 B9 6e F1 64 32 00 40 00
+			29 01 00 00 00 00 1A CE 65 40 49 53 59 5E 63 68 6E 74 7E 8A 98 A8 BB D0 ff 04 00 04 04 42 00 69 5A
+			29 01 00 00 00 00 09 F9 64 7F E0 E6 00 8D BF 80
+			29 01 00 00 00 00 03 BD 14 00
+			29 01 00 00 00 00 02 B0 00
+			];
+		qcom,mdss-dsi-panel-sre-middle-level = [
+			29 01 00 00 00 00 02 B0 04 
+			39 01 00 00 00 00 02 51 ff
+			39 01 00 00 00 00 02 55 F2
+			29 01 00 00 00 00 08 B9 6e F1 64 32 00 40 00
+			29 01 00 00 00 00 1A CE 65 40 49 53 59 5E 63 68 6E 74 7E 8A 98 A8 BB D0 ff 04 00 04 04 42 00 69 5A 
+			29 01 00 00 00 00 09 F9 64 7F E0 E6 00 8D BF 80
+			29 01 00 00 00 00 03 BD 64 00
+			29 01 00 00 00 00 02 B0 00
+			];
+		qcom,mdss-dsi-panel-sre-strong-level = [
+			29 01 00 00 00 00 02 B0 04 	
+			39 01 00 00 00 00 02 51 ff
+			39 01 00 00 00 00 02 55 F2
+			29 01 00 00 00 00 08 B9 6e F1 64 32 00 40 00
+			29 01 00 00 00 00 1A CE 65 40 49 53 59 5E 63 68 6E 74 7E 8A 98 A8 BB D0 ff 04 00 04 04 42 00 69 5A 
+			29 01 00 00 00 00 09 F9 64 7F E0 E6 00 8D BF 80
+			29 01 00 00 00 00 03 BD ff 00
+			29 01 00 00 00 00 02 B0 00
+			];
+		qcom,mdss-dsi-panel-sre-exit = [
+			29 01 00 00 00 00 02 B0 04
+			15 01 00 00 00 00 02 55 82
+			29 01 00 00 00 00 08 BA CD 51 11 00 17 00 00
+			29 01 00 00 00 00 1A CE 65 40 49 53 59 5E 63 68 6E 74 7E 8A 98 A8 BB D0 ff 04 00 04 04 42 00 69 5A
+			29 01 00 00 00 00 0A F9 64 FF E0 BE 00 8D BF 80 00
+			29 01 00 00 00 00 02 B0 00
+			];
+
+		qcom,mdss-dsi-on-command = [
+				29 01 00 00 00 00 02 b0 00
+#if 0
 				29 01 00 00 00 00 04 b3 04 00 00
 				29 01 00 00 00 00 04 b6 3b d3 00
 				29 01 00 00 00 00 28 c1 80 08 11 1f fc f2 c9 1f 5f 98 b3 fe ff f7 fe ff d7 31 f1 cb 3f 3f fd ef 03 24 69 18 aa 40 01 42 02 08 00 01 00 01 00
@@ -66,10 +162,24 @@
 				39 01 00 00 00 00 05 2b 00 00 09 ff
 				39 01 00 00 00 00 02 2c 00
 				39 01 00 00 00 00 02 36 40
-				05 01 00 00 78 00 02 29 00
+#endif
+				15 01 00 00 00 00 02 35 00
+				15 01 00 00 00 00 02 55 82 /* CABC Setting */
+				15 01 00 00 00 00 02 5E 20 /* CABC Minimum brightness */
+				15 01 00 00 00 00 02 51 ff //LED PWM duty
+				15 01 00 00 00 00 02 53 2c
+				05 01 00 00 68 00 02 29 00
 				05 01 00 00 40 00 02 11 00];
+
 		qcom,mdss-dsi-off-command = [05 01 00 00 00 00 02 28 00
 				05 01 00 00 78 00 02 10 00];
+
+		qcom,mdss-dsi-panel-timings-8996 = [23 1f 07 09 05 03 04 a0
+				23 1f 07 09 05 03 04 a0
+				23 1f 07 09 05 03 04 a0
+				23 1f 07 09 05 03 04 a0
+				23 19 08 08 05 03 04 a0];
+
 		qcom,mdss-dsi-on-command-state = "dsi_lp_mode";
 		qcom,mdss-dsi-off-command-state = "dsi_hs_mode";
 		qcom,mdss-dsi-h-sync-pulse = <1>;
@@ -77,6 +187,7 @@
 		qcom,mdss-dsi-lane-map = "lane_map_0123";
 		qcom,mdss-dsi-bllp-eof-power-mode;
 		qcom,mdss-dsi-bllp-power-mode;
+		qcom,dcs-cmd-by-left;
 		qcom,mdss-dsi-lane-0-state;
 		qcom,mdss-dsi-lane-1-state;
 		qcom,mdss-dsi-lane-2-state;
@@ -90,18 +201,20 @@
 		qcom,mdss-dsi-bl-max-level = <4095>;
 		qcom,mdss-dsi-dma-trigger = "trigger_sw";
 		qcom,mdss-dsi-mdp-trigger = "none";
-		qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_wled";
 
 		qcom,mdss-dsi-te-pin-select = <1>;
-		qcom,mdss-dsi-te-v-sync-rd-ptr-irq-line = <0x2c>;
 		qcom,mdss-dsi-te-dcs-command = <1>;
+		qcom,mdss-dsi-te-check-enable;
 		qcom,mdss-dsi-te-using-te-pin;
 
-		qcom,mdss-tear-check-sync-cfg-height = <2589>;
-		qcom,mdss-tear-check-frame-rate = <6000>;
+		//qcom,mdss-tear-check-disable;
+		//qcom,mdss-tear-check-sync-cfg-height = <2589>;
+		//qcom,mdss-tear-check-frame-rate = <6000>;
 
-		qcom,esd-check-enabled;
-		qcom,mdss-dsi-panel-status-check-mode = "te_signal_check";
-		qcom,mdss-dsi-reset-sequence = <1 1>, <0 1>, <1 5>;
+		qcom,mdss-pan-physical-width-dimension = <71>;
+		qcom,mdss-pan-physical-height-dimension = <127>;
+		//qcom,esd-check-enabled;
+		//qcom,mdss-dsi-panel-status-check-mode = "te_signal_check";
+		qcom,mdss-dsi-reset-sequence = <1 1>, <1 1>, <1 5>;
 	};
 };
