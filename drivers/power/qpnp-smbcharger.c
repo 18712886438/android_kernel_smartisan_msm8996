@@ -117,6 +117,9 @@ struct smbchg_chip {
 	int				cfg_fastchg_current_ma;
 	int				fastchg_current_ma;
 	int				vfloat_mv;
+#ifdef CONFIG_VENDOR_SMARTISAN
+	int 				max_voltage_mv;
+#endif
 	int				fastchg_current_comp;
 	int				float_voltage_comp;
 	int				resume_delta_mv;
@@ -258,6 +261,10 @@ struct smbchg_chip {
 	unsigned long			first_aicl_seconds;
 	int				aicl_irq_count;
 	struct mutex			usb_status_lock;
+#ifdef CONFIG_VENDOR_SMARTISAN
+	/*rerun usb type checking workaround*/
+	struct delayed_work		rerun_usb_type_check;
+#endif
 	bool				hvdcp_3_det_ignore_uv;
 	struct completion		src_det_lowered;
 	struct completion		src_det_raised;
@@ -931,11 +938,20 @@ static void read_usb_type(struct smbchg_chip *chip, char **usb_type_name,
 #define BATT_TAPER_CHG_VAL		0x3
 #define CHG_INHIBIT_BIT			BIT(1)
 #define BAT_TCC_REACHED_BIT		BIT(7)
+#ifdef CONFIG_VENDOR_SMARTISAN
+static int get_prop_batt_capacity(struct smbchg_chip *chip);
+static int get_prop_batt_temp(struct smbchg_chip *chip);
+static int get_prop_batt_health(struct smbchg_chip *chip);
+#endif
 static int get_prop_batt_status(struct smbchg_chip *chip)
 {
 	int rc, status = POWER_SUPPLY_STATUS_DISCHARGING;
 	u8 reg = 0, chg_type;
 	bool charger_present, chg_inhibit;
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+	int soc = get_prop_batt_capacity(chip);
+#endif
 
 	charger_present = is_usb_present(chip) | is_dc_present(chip) |
 			  chip->hvdcp_3_det_ignore_uv;
@@ -948,8 +964,19 @@ static int get_prop_batt_status(struct smbchg_chip *chip)
 		return POWER_SUPPLY_STATUS_UNKNOWN;
 	}
 
+#ifdef CONFIG_VENDOR_SMARTISAN
+	if (reg & BAT_TCC_REACHED_BIT) {
+		if (charger_present && soc < 100 && (
+			get_prop_batt_temp(chip) >= 450 ||
+			get_prop_batt_health(chip) == POWER_SUPPLY_HEALTH_WARM))
+			return POWER_SUPPLY_STATUS_CHARGING;
+		else
+			return POWER_SUPPLY_STATUS_FULL;
+	}
+#else
 	if (reg & BAT_TCC_REACHED_BIT)
 		return POWER_SUPPLY_STATUS_FULL;
+#endif
 
 	chg_inhibit = reg & CHG_INHIBIT_BIT;
 	if (chg_inhibit)
@@ -1584,7 +1611,11 @@ static void smbchg_usb_update_online_work(struct work_struct *work)
 						USER_EN_VOTER);
 	int online;
 
+#ifdef CONFIG_VENDOR_SMARTISAN
+	online = user_enabled && chip->usb_present;
+#else
 	online = user_enabled && chip->usb_present && !chip->very_weak_charger;
+#endif
 
 	mutex_lock(&chip->usb_set_online_lock);
 	if (chip->usb_online != online) {
@@ -4726,6 +4757,11 @@ static void handle_usb_removal(struct smbchg_chip *chip)
 	struct power_supply *parallel_psy = get_parallel_psy(chip);
 	int rc;
 
+#ifdef CONFIG_VENDOR_SMARTISAN
+	chip->hvdcp_3_det_ignore_uv = false;
+	cancel_delayed_work_sync(&chip->rerun_usb_type_check);
+#endif
+
 	pr_smb(PR_STATUS, "triggered\n");
 	smbchg_aicl_deglitch_wa_check(chip);
 	/* Clear the OV detected status set before */
@@ -4790,6 +4826,9 @@ static bool is_usbin_uv_high(struct smbchg_chip *chip)
 }
 
 #define HVDCP_NOTIFY_MS		2500
+#ifdef CONFIG_VENDOR_SMARTISAN
+#define DEFAULT_DETECT_MS	5000
+#endif
 static void handle_usb_insertion(struct smbchg_chip *chip)
 {
 	enum power_supply_type usb_supply_type;
@@ -4801,6 +4840,12 @@ static void handle_usb_insertion(struct smbchg_chip *chip)
 	read_usb_type(chip, &usb_type_name, &usb_supply_type);
 	pr_smb(PR_STATUS,
 		"inserted type = %d (%s)", usb_supply_type, usb_type_name);
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+	if (usb_supply_type == POWER_SUPPLY_TYPE_USB)
+		schedule_delayed_work(&chip->rerun_usb_type_check,
+					msecs_to_jiffies(DEFAULT_DETECT_MS));
+#endif
 
 	smbchg_aicl_deglitch_wa_check(chip);
 	if (chip->typec_psy)
@@ -5123,7 +5168,11 @@ static int fake_insertion_removal(struct smbchg_chip *chip, bool insertion)
 	src_detect = is_src_detect_high(chip);
 	if (src_detect == insertion) {
 		pr_err("Skip faking, src detect is already %d\n", src_detect);
+/* To consider that the usb type could be identified error sometimes,
+ * not exit, continue APSD process */
+#ifndef CONFIG_VENDOR_SMARTISAN
 		return -EINVAL;
+#endif
 	}
 
 	pr_smb(PR_MISC, "Allow only %s charger\n",
@@ -5463,6 +5512,57 @@ out:
 	chip->hvdcp_3_det_ignore_uv = false;
 	return rc;
 }
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+static void rerun_usb_type_check_work_fn(struct work_struct *work)
+{
+	enum power_supply_type usb_supply_type;
+	char *usb_type_name = "null";
+	union power_supply_propval current_max;
+	struct smbchg_chip *chip = container_of(work,struct smbchg_chip,rerun_usb_type_check.work);
+
+	if (chip->usb_max_current_ma != 0) {
+		pr_smb(PR_STATUS, "%s Detect valid charger and return", __func__);
+		return;
+	}
+
+	chip->hvdcp_3_det_ignore_uv = true;
+
+	power_supply_set_present(chip->usb_psy, false);
+	power_supply_set_supply_type(chip->usb_psy, POWER_SUPPLY_TYPE_UNKNOWN);
+
+	pr_smb(PR_STATUS, "Faking Removal\n");
+	fake_insertion_removal(chip, false);
+	msleep(500);
+	pr_smb(PR_STATUS, "Faking Insertion\n");
+	fake_insertion_removal(chip, true);
+	chip->hvdcp_3_det_ignore_uv = false;
+
+	read_usb_type(chip, &usb_type_name, &usb_supply_type);
+	pr_smb(PR_STATUS,
+			"%s inserted type = %d (%s)", __func__,
+			usb_supply_type, usb_type_name);
+	power_supply_set_present(chip->usb_psy, true);
+	if (usb_supply_type == POWER_SUPPLY_TYPE_USB) {
+		msleep(1200);
+		read_usb_type(chip, &usb_type_name, &usb_supply_type);
+		if (usb_supply_type == POWER_SUPPLY_TYPE_USB) {
+			current_max.intval = 500000;
+			chip->usb_psy->set_property(chip->usb_psy,
+					POWER_SUPPLY_PROP_CURRENT_MAX, &current_max);
+			smbchg_change_usb_supply_type(chip, usb_supply_type);
+		} else {
+			smbchg_change_usb_supply_type(chip, usb_supply_type);
+			schedule_delayed_work(&chip->hvdcp_det_work,
+					msecs_to_jiffies(HVDCP_NOTIFY_MS));
+		}
+	} else {
+		smbchg_change_usb_supply_type(chip, usb_supply_type);
+		schedule_delayed_work(&chip->hvdcp_det_work,
+				msecs_to_jiffies(HVDCP_NOTIFY_MS));
+	}
+}
+#endif
 
 #define SCHG_LITE_USBIN_HVDCP_5_9V		0x8
 #define SCHG_LITE_USBIN_HVDCP_5_9V_SEL_MASK	0x38
@@ -6171,6 +6271,27 @@ static irqreturn_t batt_warm_handler(int irq, void *_chip)
 {
 	struct smbchg_chip *chip = _chip;
 	u8 reg = 0;
+#ifdef CONFIG_VENDOR_SMARTISAN
+	int rc = 0;
+
+/* both surabaya and colombo limit the voltage as 4.1V in cool state */
+	if (irq) {
+		rc = get_prop_batt_health(chip);
+		pr_smb(PR_STATUS, "battery health status: %d\n", rc);
+		if (rc == POWER_SUPPLY_HEALTH_WARM) {
+			smbchg_float_voltage_set(chip, chip->max_voltage_mv);
+			pr_smb(PR_STATUS, "Warm to Normal\n");
+		} else if (rc == POWER_SUPPLY_HEALTH_GOOD) {
+			rc = smbchg_float_voltage_set(chip, 4100);
+			if (rc < 0) {
+				dev_err(chip->dev,
+					"Couldn't set float voltage rc = %d\n", rc);
+				return rc;
+			}
+			pr_smb(PR_STATUS, "Normal to Warm, set vfloat to %d\n", chip->vfloat_mv);
+		}
+	}
+#endif
 
 	smbchg_read(chip, &reg, chip->bat_if_base + RT_STS, 1);
 	chip->batt_warm = !!(reg & HOT_BAT_SOFT_BIT);
@@ -7400,6 +7521,9 @@ err:
 
 #define DEFAULT_VLED_MAX_UV		3500000
 #define DEFAULT_FCC_MA			2000
+#ifdef CONFIG_VENDOR_SMARTISAN
+#define DEFAULT_VFLOAT_MAX_MV		4200
+#endif
 static int smb_parse_dt(struct smbchg_chip *chip)
 {
 	int rc = 0, ocp_thresh = -EINVAL;
@@ -7422,6 +7546,12 @@ static int smb_parse_dt(struct smbchg_chip *chip)
 	if (chip->cfg_fastchg_current_ma == -EINVAL)
 		chip->cfg_fastchg_current_ma = DEFAULT_FCC_MA;
 	OF_PROP_READ(chip, chip->vfloat_mv, "float-voltage-mv", rc, 1);
+#ifdef CONFIG_VENDOR_SMARTISAN
+	if (chip->vfloat_mv == -EINVAL)
+		chip->max_voltage_mv = DEFAULT_VFLOAT_MAX_MV;
+	else
+		chip->max_voltage_mv = chip->vfloat_mv;
+#endif
 	OF_PROP_READ(chip, chip->safety_time, "charging-timeout-mins", rc, 1);
 	OF_PROP_READ(chip, chip->vled_max_uv, "vled-max-uv", rc, 1);
 	if (chip->vled_max_uv < 0)
@@ -8187,6 +8317,9 @@ static int smbchg_probe(struct spmi_device *spmi)
 			smbchg_parallel_usb_en_work);
 	INIT_DELAYED_WORK(&chip->vfloat_adjust_work, smbchg_vfloat_adjust_work);
 	INIT_DELAYED_WORK(&chip->hvdcp_det_work, smbchg_hvdcp_det_work);
+#ifdef CONFIG_VENDOR_SMARTISAN
+	INIT_DELAYED_WORK(&chip->rerun_usb_type_check, rerun_usb_type_check_work_fn);
+#endif
 	init_completion(&chip->src_det_lowered);
 	init_completion(&chip->src_det_raised);
 	init_completion(&chip->usbin_uv_lowered);
