@@ -22,6 +22,9 @@
 #include <linux/qpnp/pwm.h>
 #include <linux/err.h>
 #include <linux/string.h>
+#ifdef CONFIG_VENDOR_SMARTISAN
+#include <linux/platform_data/ti-scbl.h>
+#endif
 
 #include "mdss_dsi.h"
 #include "mdss_dba_utils.h"
@@ -31,6 +34,66 @@
 #define DEFAULT_MDP_TRANSFER_TIME 14000
 
 #define VSYNC_DELAY msecs_to_jiffies(17)
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+#define ID_SUR_LCD	50
+
+struct semaphore firm_sem;
+EXPORT_SYMBOL(firm_sem);
+
+struct dsi_panel_cmds color_temperature_cmds0;
+struct dsi_panel_cmds color_temperature_cmds1;
+struct dsi_panel_cmds color_temperature_cmds2;
+struct dsi_panel_cmds color_temperature_cmds3;
+struct dsi_panel_cmds color_temperature_cmds4;
+struct dsi_panel_cmds color_temperature_cmds5;
+struct dsi_panel_cmds color_temperature_cmds6;
+struct dsi_panel_cmds color_temperature_cmds7;
+struct dsi_panel_cmds color_temperature_cmds8;
+struct dsi_panel_cmds color_temperature_cmds9;
+struct dsi_panel_cmds color_temperature_cmds10;
+struct dsi_panel_cmds color_temperature_cmds11;
+struct dsi_panel_cmds color_temperature_cmds12;
+struct dsi_panel_cmds color_temperature_cmds13;
+struct dsi_panel_cmds color_temperature_cmds_reset;
+struct dsi_panel_cmds sre_weak_level;
+struct dsi_panel_cmds sre_middle_level;
+struct dsi_panel_cmds sre_strong_level;
+struct dsi_panel_cmds sre_exit;
+
+static int temperature_level = 0xff;
+
+enum LCD_REG_IE_SET {
+	LCD_CABC_ZEARO = 0,
+	LCD_CABC_STATIC,
+	LCD_CABC_UI,
+	LCD_CABC_VIDEO,
+	LCD_CABC_UI_QUALITY_SHARP = 0xB2,
+	LCD_CABC_UI_QUALITY_BOE = 0x82,
+	LCD_TEMPCOLOR_LEVEL1 = 4,
+	LCD_TEMPCOLOR_LEVEL2,
+	LCD_TEMPCOLOR_LEVEL3,
+	LCD_TEMPCOLOR_LEVEL4,
+	LCD_TEMPCOLOR_LEVEL5,
+	LCD_TEMPCOLOR_LEVEL6,
+	LCD_TEMPCOLOR_LEVEL7,
+	LCD_TEMPCOLOR_LEVEL8,
+	LCD_TEMPCOLOR_LEVEL9,
+	LCD_TEMPCOLOR_LEVEL10,
+	LCD_TEMPCOLOR_LEVEL11,
+	LCD_TEMPCOLOR_LEVEL12,
+	LCD_TEMPCOLOR_LEVEL13,
+	LCD_TEMPCOLOR_LEVEL14,
+	LCD_TEMPCOLOR_LEVEL15,
+	LCD_TEMPCOLOR_LEVEL16,
+	LCD_TEMPCOLOR_LEVEL_RESTORE = 17,
+	LCD_BRIGHTNESS_PWM_LEVEL_FULL = 0xFF,
+	LCD_BRIGHTNESS_PWM_LEVEL_1 = 0xAF,
+	LCD_BRIGHTNESS_PWM_LEVEL_2 = 0x8F,
+	LCD_BRIGHTNESS_PWM_LEVEL_3 = 0x5F,
+	LCD_BRIGHTNESS_PWM_LEVEL_4 = 0x30,
+};
+#endif
 
 DEFINE_LED_TRIGGER(bl_led_trigger);
 
@@ -126,14 +189,23 @@ static void mdss_dsi_panel_bklt_pwm(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 	}
 }
 
+#ifdef CONFIG_VENDOR_SMARTISAN
+static char dcs_cmd[3] = {0x54, 0x00, 0x00}; /* DTYPE_DCS_READ */
+#else
 static char dcs_cmd[2] = {0x54, 0x00}; /* DTYPE_DCS_READ */
+#endif
 static struct dsi_cmd_desc dcs_read_cmd = {
 	{DTYPE_DCS_READ, 1, 0, 1, 5, sizeof(dcs_cmd)},
 	dcs_cmd
 };
 
+#ifdef CONFIG_VENDOR_SMARTISAN
+int mdss_dsi_panel_cmd_read(struct mdss_dsi_ctrl_pdata *ctrl, char cmd0,
+		char cmd1, char cmd2, void (*fxn)(int), char *rbuf, int len)
+#else
 int mdss_dsi_panel_cmd_read(struct mdss_dsi_ctrl_pdata *ctrl, char cmd0,
 		char cmd1, void (*fxn)(int), char *rbuf, int len)
+#endif
 {
 	struct dcs_cmd_req cmdreq;
 	struct mdss_panel_info *pinfo;
@@ -146,6 +218,9 @@ int mdss_dsi_panel_cmd_read(struct mdss_dsi_ctrl_pdata *ctrl, char cmd0,
 
 	dcs_cmd[0] = cmd0;
 	dcs_cmd[1] = cmd1;
+#ifdef CONFIG_VENDOR_SMARTISAN
+	dcs_cmd[2] = cmd2;
+#endif
 	memset(&cmdreq, 0, sizeof(cmdreq));
 	cmdreq.cmds = &dcs_read_cmd;
 	cmdreq.cmds_cnt = 1;
@@ -219,6 +294,150 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+static char ie_level[2] = {0x55, 0x00}; /* DTYPE_DCS_WRITE1 */
+static char pwm_level[2] = {0x51, 0xff}; /* DTYPE_DCS_WRITE1 */
+
+static struct dsi_cmd_desc ie_level_cmd = {
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(ie_level)},
+	ie_level
+};
+
+static struct dsi_cmd_desc pwm_level_cmd = {
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(pwm_level)},
+	pwm_level
+};
+
+void mdss_dsi_panel_ie_level_setting(struct mdss_panel_data *pdata, int level)
+{
+	struct dcs_cmd_req cmdreq;
+	struct mdss_dsi_ctrl_pdata *ctrl;
+	struct mdss_panel_info *pinfo;
+	struct dsi_panel_cmds *color_temperature_cmd;
+
+	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
+				panel_data);
+
+	pinfo = &(pdata->panel_info);
+	if (pinfo->dcs_cmd_by_left) {
+		if (ctrl->ndx != DSI_CTRL_LEFT)
+			return;
+	}
+
+	pr_info("%s: level=%d\n", __func__, level);
+
+	if (level == 18)
+		temperature_level = 0xff;
+	else if (level > 3 && level < 22)
+		temperature_level = level;
+
+	if (level > 3 && level < 26) {
+		switch (level) {
+		case 4:
+			color_temperature_cmd = &color_temperature_cmds0;
+			break;
+		case 5:
+			color_temperature_cmd = &color_temperature_cmds1;
+			break;
+		case 6:
+			color_temperature_cmd = &color_temperature_cmds2;
+			break;
+		case 7:
+			color_temperature_cmd = &color_temperature_cmds3;
+			break;
+		case 8:
+			color_temperature_cmd = &color_temperature_cmds4;
+			break;
+		case 9:
+			color_temperature_cmd = &color_temperature_cmds5;
+			break;
+		case 10:
+			color_temperature_cmd = &color_temperature_cmds6;
+			break;
+		case 11:
+			color_temperature_cmd = &color_temperature_cmds7;
+			break;
+		case 12:
+			color_temperature_cmd = &color_temperature_cmds8;
+			break;
+		case 13:
+			color_temperature_cmd = &color_temperature_cmds9;
+			break;
+		case 14:
+			color_temperature_cmd = &color_temperature_cmds10;
+			break;
+		case 15:
+			color_temperature_cmd = &color_temperature_cmds11;
+			break;
+		case 16:
+			color_temperature_cmd = &color_temperature_cmds12;
+			break;
+		case 17:
+			color_temperature_cmd = &color_temperature_cmds13;
+			break;
+		case 18:
+			color_temperature_cmd = &color_temperature_cmds_reset;
+			break;
+		default:
+			break;
+		}
+		if (level < 20)
+			mdss_dsi_panel_cmds_send(ctrl, color_temperature_cmd, CMD_REQ_COMMIT);
+	} else if (level == 64) {
+		color_temperature_cmd = &sre_weak_level;
+		mdss_dsi_panel_cmds_send(ctrl, color_temperature_cmd, CMD_REQ_COMMIT);
+	} else if (level == 80) {
+		color_temperature_cmd = &sre_middle_level;
+		mdss_dsi_panel_cmds_send(ctrl, color_temperature_cmd, CMD_REQ_COMMIT);
+	} else if (level == 96) {
+		color_temperature_cmd = &sre_strong_level;
+		mdss_dsi_panel_cmds_send(ctrl, color_temperature_cmd, CMD_REQ_COMMIT);
+	} else if (level == 178) {
+		color_temperature_cmd = &sre_exit;
+		mdss_dsi_panel_cmds_send(ctrl, color_temperature_cmd, CMD_REQ_COMMIT);
+	} else {
+		ie_level[1] = (unsigned char)level;
+
+		memset(&cmdreq, 0, sizeof(cmdreq));
+		cmdreq.cmds = &ie_level_cmd;
+		cmdreq.cmds_cnt = 1;
+		cmdreq.flags = CMD_REQ_COMMIT | CMD_CLK_CTRL;
+		cmdreq.rlen = 0;
+		cmdreq.cb = NULL;
+
+		mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+	}
+}
+EXPORT_SYMBOL(mdss_dsi_panel_ie_level_setting);
+
+void mdss_dsi_panel_lcd_pwm_level_setting(struct mdss_panel_data *pdata, int brightness_pwm_level)
+{
+	struct dcs_cmd_req cmdreq;
+	struct mdss_dsi_ctrl_pdata *ctrl;
+	struct mdss_panel_info *pinfo;
+
+	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
+				panel_data);
+
+	pr_debug("%s: level=%d\n", __func__, brightness_pwm_level);
+	pinfo = &(pdata->panel_info);
+	if (pinfo->dcs_cmd_by_left) {
+		if (ctrl->ndx != DSI_CTRL_LEFT)
+			return;
+	}
+
+	pwm_level[1] = brightness_pwm_level;
+	memset(&cmdreq, 0, sizeof(cmdreq));
+	cmdreq.cmds = &pwm_level_cmd;
+	cmdreq.cmds_cnt = 1;
+	cmdreq.flags = CMD_REQ_COMMIT | CMD_CLK_CTRL;
+	cmdreq.rlen = 0;
+	cmdreq.cb = NULL;
+
+	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+}
+#endif
 
 static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
@@ -641,11 +860,17 @@ static void mdss_dsi_panel_switch_mode(struct mdss_panel_data *pdata,
 		mdss_dsi_panel_dsc_pps_send(ctrl_pdata, &pdata->panel_info);
 }
 
+#ifdef CONFIG_VENDOR_SMARTISAN
+#define LCD_ID 50
+#endif
 static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 							u32 bl_level)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	struct mdss_dsi_ctrl_pdata *sctrl = NULL;
+#ifdef CONFIG_VENDOR_SMARTISAN
+	u32 brightness_min_pwm = 0xff;
+#endif
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -666,6 +891,15 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 
 	switch (ctrl_pdata->bklt_ctrl) {
 	case BL_WLED:
+#ifdef CONFIG_VENDOR_SMARTISAN
+		if (bl_level < 100) {
+			brightness_min_pwm = LCD_BRIGHTNESS_PWM_LEVEL_FULL * bl_level / 100;
+			pr_debug("+:brightness_min_pwm = %x\n", brightness_min_pwm);
+			mdss_dsi_panel_lcd_pwm_level_setting(pdata, brightness_min_pwm);
+		} else if (bl_level > 99) {
+			mdss_dsi_panel_lcd_pwm_level_setting(pdata, LCD_BRIGHTNESS_PWM_LEVEL_FULL);
+		}
+#endif
 		led_trigger_event(bl_led_trigger, bl_level);
 		break;
 	case BL_PWM:
@@ -695,6 +929,36 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 				mdss_dsi_panel_bklt_dcs(sctrl, bl_level);
 		}
 		break;
+#if defined(CONFIG_VENDOR_SMARTISAN) && defined(CONFIG_LCD_COLOMBO)
+	case BL_IC_LM36923:
+		if (bl_level < 35) {
+			mdss_dsi_panel_ie_level_setting(pdata, LCD_CABC_ZEARO);
+		} else {
+			if (gpio_get_value(LCD_ID) == 0) {
+				mdss_dsi_panel_ie_level_setting(pdata, LCD_CABC_UI_QUALITY_SHARP);
+			} else {
+				mdss_dsi_panel_ie_level_setting(pdata, LCD_CABC_UI_QUALITY_BOE);
+			}
+		}
+
+		if (bl_level < 35) {
+			brightness_min_pwm = LCD_BRIGHTNESS_PWM_LEVEL_FULL * bl_level / 35;
+			pr_debug("+:brightness_min_pwm = %x\n", brightness_min_pwm);
+			mdss_dsi_panel_lcd_pwm_level_setting(pdata, brightness_min_pwm);
+		} else if (bl_level > 34) {
+			mdss_dsi_panel_lcd_pwm_level_setting(pdata, LCD_BRIGHTNESS_PWM_LEVEL_FULL);
+		}
+
+		if (bl_level == 0)
+			down(&firm_sem);
+
+		scbl_set_brightness(bl_level);
+
+		if (bl_level == 0)
+			up(&firm_sem);
+
+		break;
+#endif
 	default:
 		pr_err("%s: Unknown bl_ctrl configuration\n",
 			__func__);
@@ -734,6 +998,12 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	pr_debug("%s: ndx=%d cmd_cnt=%d\n", __func__,
 				ctrl->ndx, on_cmds->cmd_cnt);
 
+#if defined(CONFIG_VENDOR_SMARTISAN) && defined(CONFIG_LCD_COLOMBO)
+	if (gpio_get_value(ID_SUR_LCD) == 0 && temperature_level != 0xff) {
+		mdss_dsi_panel_ie_level_setting(pdata, temperature_level);
+	}
+#endif
+
 	if (on_cmds->cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, on_cmds, CMD_REQ_COMMIT);
 
@@ -742,6 +1012,20 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 
 	if (ctrl->ds_registered)
 		mdss_dba_utils_video_on(pinfo->dba_data, pinfo);
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+#ifdef CONFIG_LCD_COLOMBO
+	if (gpio_get_value(ID_SUR_LCD) != 0 && temperature_level != 0xff) {
+		mdelay(5);
+		mdss_dsi_panel_ie_level_setting(pdata, temperature_level);
+	}
+#else // CONFIG_LCD_COLOMBO
+	if (temperature_level != 0xff) {
+		mdelay(5);
+		mdss_dsi_panel_ie_level_setting(pdata, temperature_level);
+	}
+#endif // CONFIG_LCD_COLOMBO
+#endif // CONFIG_VENDOR_SMARTISAN
 end:
 	pr_debug("%s:-\n", __func__);
 	return ret;
@@ -2083,6 +2367,12 @@ int mdss_panel_parse_bl_settings(struct device_node *np,
 			ctrl_pdata->bklt_ctrl = BL_DCS_CMD;
 			pr_debug("%s: Configured DCS_CMD bklt ctrl\n",
 								__func__);
+#ifdef CONFIG_VENDOR_SMARTISAN
+		} else if (!strcmp(data, "bl_ctrl_lm36923")) {
+			ctrl_pdata->bklt_ctrl = BL_IC_LM36923;
+			pr_debug("%s: Configured BL_IC_LM36923 bklt ctrl\n",
+								__func__);
+#endif
 		}
 	}
 	return 0;
@@ -2269,6 +2559,65 @@ static int  mdss_dsi_panel_config_res_properties(struct device_node *np,
 	mdss_dsi_parse_dcs_cmds(np, &pt->switch_cmds,
 		"qcom,mdss-dsi-timing-switch-command",
 		"qcom,mdss-dsi-timing-switch-command-state");
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds0,
+		"qcom,mdss-dsi-panel-color-temperature-command0", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds1,
+		"qcom,mdss-dsi-panel-color-temperature-command1", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds2,
+		"qcom,mdss-dsi-panel-color-temperature-command2", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds3,
+		"qcom,mdss-dsi-panel-color-temperature-command3", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds4,
+		"qcom,mdss-dsi-panel-color-temperature-command4", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds5,
+		"qcom,mdss-dsi-panel-color-temperature-command5", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds6,
+		"qcom,mdss-dsi-panel-color-temperature-command6", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds7,
+		"qcom,mdss-dsi-panel-color-temperature-command7", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds8,
+		"qcom,mdss-dsi-panel-color-temperature-command8", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds9,
+		"qcom,mdss-dsi-panel-color-temperature-command9", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds10,
+		"qcom,mdss-dsi-panel-color-temperature-command11", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds11,
+		"qcom,mdss-dsi-panel-color-temperature-command12", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds12,
+		"qcom,mdss-dsi-panel-color-temperature-command13", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds13,
+		"qcom,mdss-dsi-panel-color-temperature-command14", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &color_temperature_cmds_reset,
+		"qcom,mdss-dsi-panel-color-temperature-command_restore", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &sre_weak_level,
+		"qcom,mdss-dsi-panel-sre-weak-level", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &sre_middle_level,
+		"qcom,mdss-dsi-panel-sre-middle-level", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &sre_strong_level,
+		"qcom,mdss-dsi-panel-sre-strong-level", NULL);
+
+	mdss_dsi_parse_dcs_cmds(np, &sre_exit,
+		"qcom,mdss-dsi-panel-sre-exit", NULL);
+#endif
 
 	rc = mdss_dsi_parse_topology_config(np, pt, panel_data, default_timing);
 	if (rc) {
@@ -2609,6 +2958,10 @@ int mdss_dsi_panel_init(struct device_node *node,
 		pr_err("%s: Invalid arguments\n", __func__);
 		return -ENODEV;
 	}
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+	sema_init(&firm_sem, 1);
+#endif
 
 	pinfo = &ctrl_pdata->panel_data.panel_info;
 

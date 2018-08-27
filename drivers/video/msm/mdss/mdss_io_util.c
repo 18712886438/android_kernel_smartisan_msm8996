@@ -225,6 +225,16 @@ int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 				goto vreg_set_opt_mode_fail;
 			}
 			need_sleep = !regulator_is_enabled(in_vreg[i].vreg);
+#ifdef CONFIG_VENDOR_SMARTISAN
+			if (!strcmp(in_vreg[i].vreg_name, "ibb")) {
+				need_sleep = true;
+			}
+#ifdef CONFIG_LCD_COLOMBO
+			if (!strcmp(in_vreg[i].vreg_name, "vddio")) {
+				gpio_set_value(92, 1);
+			}
+#endif // CONFIG_LCD_COLOMBO
+#endif // CONFIG_VENDOR_SMARTISAN
 			if (in_vreg[i].pre_on_sleep && need_sleep)
 				usleep_range(in_vreg[i].pre_on_sleep * 1000,
 					in_vreg[i].pre_on_sleep * 1000);
@@ -255,6 +265,13 @@ int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 			regulator_set_optimum_mode(in_vreg[i].vreg,
 				in_vreg[i].disable_load);
 			regulator_disable(in_vreg[i].vreg);
+#ifdef CONFIG_VENDOR_SMARTISAN
+#ifdef CONFIG_LCD_COLOMBO
+			if (!strcmp(in_vreg[i].vreg_name, "lab")) {
+				gpio_set_value(92, 0);
+			}
+#endif // CONFIG_LCD_COLOMBO
+#endif // CONFIG_VENDOR_SMARTISAN
 			if (in_vreg[i].post_off_sleep)
 				usleep_range(in_vreg[i].post_off_sleep * 1000,
 					in_vreg[i].post_off_sleep * 1000);
