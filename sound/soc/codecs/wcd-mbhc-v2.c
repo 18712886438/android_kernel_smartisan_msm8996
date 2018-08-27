@@ -578,7 +578,11 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 				~WCD_MBHC_JACK_BUTTON_MASK;
 		}
 
+#ifdef CONFIG_VENDOR_SMARTISAN
+		if (mbhc->micbias_enable || (mbhc->current_plug != MBHC_PLUG_TYPE_HEADPHONE)) {
+#else
 		if (mbhc->micbias_enable) {
+#endif
 			if (mbhc->mbhc_cb->mbhc_micbias_control)
 				mbhc->mbhc_cb->mbhc_micbias_control(
 						codec, MIC_BIAS_2,
@@ -1433,8 +1437,15 @@ enable_supply:
 	else
 		wcd_enable_mbhc_supply(mbhc, plug_type);
 exit:
+#ifdef CONFIG_VENDOR_SMARTISAN
+	if (mbhc->mbhc_cb->mbhc_micbias_control &&
+	    (!mbhc->micbias_enable &&
+	    (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE ||
+	        mbhc->current_plug == MBHC_PLUG_TYPE_NONE)))
+#else
 	if (mbhc->mbhc_cb->mbhc_micbias_control &&
 	    !mbhc->micbias_enable)
+#endif
 		mbhc->mbhc_cb->mbhc_micbias_control(codec, MIC_BIAS_2,
 						    MICB_DISABLE);
 	if (mbhc->mbhc_cb->micbias_enable_status) {
@@ -1630,15 +1641,42 @@ static irqreturn_t wcd_mbhc_mech_plug_detect_irq(int irq, void *data)
 {
 	int r = IRQ_HANDLED;
 	struct wcd_mbhc *mbhc = data;
+#ifdef CONFIG_VENDOR_SMARTISAN
+	bool detection_type;
+	int ms_delay = 0;
+#endif
 
 	pr_debug("%s: enter\n", __func__);
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+	if (cancel_delayed_work_sync(&mbhc->mbhc_deal_with_insert_dwork)) {
+		mbhc->mbhc_cb->lock_sleep(mbhc, false);
+	}
+
+	WCD_MBHC_RSC_LOCK(mbhc);
+	WCD_MBHC_REG_READ(WCD_MBHC_MECH_DETECTION_TYPE, detection_type);
+	WCD_MBHC_RSC_UNLOCK(mbhc);
+
+	pr_debug("detection_type: %d\n", detection_type);
+
+	if (detection_type == 1) { // insert detection
+		ms_delay = 600;
+	} else { // remove detection
+		ms_delay = 0;
+	}
+#endif
+
 	if (unlikely((mbhc->mbhc_cb->lock_sleep(mbhc, true)) == false)) {
 		pr_warn("%s: failed to hold suspend\n", __func__);
 		r = IRQ_NONE;
 	} else {
+#ifdef CONFIG_VENDOR_SMARTISAN
+		schedule_delayed_work(&mbhc->mbhc_deal_with_insert_dwork, msecs_to_jiffies(ms_delay));
+#else
 		/* Call handler */
 		wcd_mbhc_swch_irq_handler(mbhc);
 		mbhc->mbhc_cb->lock_sleep(mbhc, false);
+#endif
 	}
 	pr_debug("%s: leave %d\n", __func__, r);
 	return r;
@@ -1902,6 +1940,25 @@ static void wcd_btn_lpress_fn(struct work_struct *work)
 	mbhc->mbhc_cb->lock_sleep(mbhc, false);
 }
 
+#ifdef CONFIG_VENDOR_SMARTISAN
+static void wcd_deal_with_insert_fn(struct work_struct *work)
+{
+	struct delayed_work *dwork;
+	struct wcd_mbhc *mbhc;
+
+	pr_debug("%s: Enter\n", __func__);
+
+	dwork = to_delayed_work(work);
+	mbhc = container_of(dwork, struct wcd_mbhc, mbhc_deal_with_insert_dwork);
+
+	/* Call handler */
+	wcd_mbhc_swch_irq_handler(mbhc);
+
+	pr_debug("%s: leave\n", __func__);
+	mbhc->mbhc_cb->lock_sleep(mbhc, false);
+}
+#endif
+
 static bool wcd_mbhc_fw_validate(const void *data, size_t size)
 {
 	u32 cfg_offset;
@@ -2002,6 +2059,18 @@ static irqreturn_t wcd_mbhc_release_handler(int irq, void *data)
 	 * headset not headphone.
 	 */
 	if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE) {
+#ifdef CONFIG_VENDOR_SMARTISAN
+		/*
+		 * 4-pole headset slow insert, first report headphone, then headset.
+		 * Headset need micbias2 to be powered on.
+		 */
+		if (mbhc->mbhc_cb->mbhc_micbias_control) {
+			mbhc->mbhc_cb->mbhc_micbias_control(
+				mbhc->codec, MIC_BIAS_2, MICB_ENABLE);
+		} else {
+			wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_MB);
+		}
+#endif
 		wcd_mbhc_find_plug_and_report(mbhc, MBHC_PLUG_TYPE_HEADSET);
 		goto exit;
 
@@ -2459,6 +2528,9 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 		INIT_DELAYED_WORK(&mbhc->mbhc_firmware_dwork,
 				  wcd_mbhc_fw_read);
 		INIT_DELAYED_WORK(&mbhc->mbhc_btn_dwork, wcd_btn_lpress_fn);
+#ifdef CONFIG_VENDOR_SMARTISAN
+		INIT_DELAYED_WORK(&mbhc->mbhc_deal_with_insert_dwork, wcd_deal_with_insert_fn);
+#endif
 	}
 	mutex_init(&mbhc->hphl_pa_lock);
 	mutex_init(&mbhc->hphr_pa_lock);
