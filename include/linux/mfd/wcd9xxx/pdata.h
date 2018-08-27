@@ -191,6 +191,10 @@ struct wcd9xxx_pdata {
 	u32 dmic_clk_drv;
 	enum codec_variant cdc_variant;
 	u16 use_pinctrl;
+#ifdef CONFIG_VENDOR_SMARTISAN
+	int lineout_hph_switch;
+	int ext_pa_enable;
+#endif
 };
 
 #endif

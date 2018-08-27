@@ -32,6 +32,9 @@
 #include <linux/kernel.h>
 #include <linux/gpio.h>
 #include <linux/soundwire/swr-wcd.h>
+#ifdef CONFIG_VENDOR_SMARTISAN
+#include <soc/qcom/socinfo.h>
+#endif
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
@@ -193,6 +196,15 @@ static int tx_unmute_delay = TASHA_TX_UNMUTE_DELAY_MS;
 module_param(tx_unmute_delay, int,
 		S_IRUGO | S_IWUSR | S_IWGRP);
 MODULE_PARM_DESC(tx_unmute_delay, "delay to unmute the tx path");
+
+#ifdef CONFIG_VENDOR_SMARTISAN_SURABAYA
+static int lineout_hph_swch;
+static int ext_pa_en;
+#endif
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+#define UART_HEADSET_SEL 73
+#endif
 
 static struct afe_param_slimbus_slave_port_cfg tasha_slimbus_slave_port_cfg = {
 	.minor_version = 1,
@@ -811,6 +823,10 @@ struct tasha_priv {
 	int rx_8_count;
 	bool clk_mode;
 	bool clk_internal;
+
+#ifdef CONFIG_VENDOR_SMARTISAN_SURABAYA
+	struct delayed_work ext_pa_pwrdwn_dwork;
+#endif
 };
 
 static int tasha_codec_vote_max_bw(struct snd_soc_codec *codec,
@@ -1458,6 +1474,19 @@ static int tasha_mbhc_request_micbias(struct snd_soc_codec *codec,
 				      int micb_num, int req)
 {
 	int ret;
+#ifdef CONFIG_VENDOR_SMARTISAN
+	static int last_state = -1;
+
+	dev_dbg(codec->dev, "%s: micb_num: %d, cur: %d, req: %d\n", __func__, micb_num, last_state, req);
+	/*
+	 * workaround, when slow insert headset, first report headphone with micbias2 powered on.Then will
+	 * report headset with micbias2 powered on again, and the reference count will increase.
+	 */
+	if (last_state == req)
+		return 0;
+	else
+		last_state = req;
+#endif
 
 	/*
 	 * If micbias is requested, make sure that there
@@ -2115,6 +2144,51 @@ static int tasha_put_clkmode(struct snd_kcontrol *kcontrol,
 
 	return 0;
 }
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+static int tasha_mbhc_bias2_set(struct snd_kcontrol *kcontrol,
+				   struct snd_ctl_elem_value *ucontrol) {
+
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
+	int enable = ucontrol->value.integer.value[0];
+	struct wcd_mbhc *mbhc =
+		(struct wcd_mbhc *)(&(((struct tasha_priv *)snd_soc_codec_get_drvdata(codec))->mbhc));
+
+	if (enable) {
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 1);
+		snd_soc_update_bits(codec, WCD9335_ANA_MBHC_ELECT,
+				    0x01, 0x01);
+		tasha_mbhc_request_micbias(codec, MIC_BIAS_2, MICB_ENABLE);
+	} else {
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
+		snd_soc_update_bits(codec, WCD9335_ANA_MBHC_ELECT,
+				    0x01, 0x00);
+		tasha_mbhc_request_micbias(codec, MIC_BIAS_2, MICB_DISABLE);
+	}
+
+	return 0;
+}
+
+static int tasha_mbhc_bias2_get(struct snd_kcontrol *kcontrol,
+				   struct snd_ctl_elem_value *ucontrol) {
+
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
+	int value;
+
+	value = (snd_soc_read(codec, WCD9335_ANA_MICB2) >> 6);
+	if (value == 0x01)
+		ucontrol->value.integer.value[0] = 1;
+	else
+		ucontrol->value.integer.value[0] = 0;
+
+	return 0;
+}
+
+static const struct snd_kcontrol_new mic_bias2_enable[] = {
+	SOC_SINGLE_EXT("mic_bias2_en", WCD9335_ANA_MBHC_ELECT, 0, 1, 0,
+		tasha_mbhc_bias2_get, tasha_mbhc_bias2_set),
+};
+#endif
 
 static int tasha_get_iir_enable_audio_mixer(
 					struct snd_kcontrol *kcontrol,
@@ -3975,11 +4049,35 @@ static int tasha_codec_enable_hphl_pa(struct snd_soc_dapm_widget *w,
 	return ret;
 }
 
+#ifdef CONFIG_VENDOR_SMARTISAN_SURABAYA
+static void ext_pa_powerdown_work(struct work_struct *work)
+{
+	struct delayed_work *dwork;
+	struct tasha_priv *tasha;
+
+	dwork = to_delayed_work(work);
+	tasha = container_of(dwork, struct tasha_priv, ext_pa_pwrdwn_dwork);
+
+	mutex_lock(&tasha->swr_write_lock);
+	if (gpio_get_value_cansleep(lineout_hph_swch) == 1) {
+		pr_debug("%s: power down external pa\n", __func__);
+		gpio_direction_output(lineout_hph_swch, 0);
+		usleep_range(10000, 10000);
+		gpio_direction_output(ext_pa_en, 0);
+		usleep_range(10000, 10000);
+	}
+	mutex_unlock(&tasha->swr_write_lock);
+}
+#endif
+
 static int tasha_codec_enable_lineout_pa(struct snd_soc_dapm_widget *w,
 					 struct snd_kcontrol *kcontrol,
 					 int event)
 {
 	struct snd_soc_codec *codec = w->codec;
+#ifdef CONFIG_VENDOR_SMARTISAN_SURABAYA
+	struct tasha_priv *tasha = snd_soc_codec_get_drvdata(codec);
+#endif
 	u16 lineout_vol_reg, lineout_mix_vol_reg;
 	int ret = 0;
 
@@ -4009,6 +4107,21 @@ static int tasha_codec_enable_lineout_pa(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
+#ifdef CONFIG_VENDOR_SMARTISAN_SURABAYA
+		if (!strncmp("LINEOUT1", w->name, 8)) {
+			dev_dbg(codec->dev, "%s cancel external pa delay work\n", __func__);
+			cancel_delayed_work_sync(&tasha->ext_pa_pwrdwn_dwork);
+			mutex_lock(&tasha->swr_write_lock);
+			if (gpio_get_value_cansleep(lineout_hph_swch) == 0) {
+				gpio_direction_output(ext_pa_en, 1);
+				usleep_range(10000, 10000);
+				gpio_direction_output(lineout_hph_swch, 1);
+				usleep_range(10000, 10000);
+			}
+			mutex_unlock(&tasha->swr_write_lock);
+		}
+#endif
+
 		/* 5ms sleep is required after PA is enabled as per
 		 * HW requirement
 		 */
@@ -4026,6 +4139,17 @@ static int tasha_codec_enable_lineout_pa(struct snd_soc_dapm_widget *w,
 		tasha_codec_override(codec, CLS_AB, event);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
+#ifdef CONFIG_VENDOR_SMARTISAN_SURABAYA
+		if (!strncmp("LINEOUT1", w->name, 8)) {
+			if (gpio_get_value_cansleep(lineout_hph_swch) == 1) {
+				cancel_delayed_work_sync(&tasha->ext_pa_pwrdwn_dwork);
+				dev_dbg(codec->dev, "%s delay to power down external pa\n", __func__);
+				schedule_delayed_work(&tasha->ext_pa_pwrdwn_dwork,
+						      msecs_to_jiffies(600));
+			}
+		}
+#endif
+
 		/* 5ms sleep is required after PA is disabled as per
 		 * HW requirement
 		 */
@@ -13193,6 +13317,12 @@ static int tasha_codec_probe(struct snd_soc_codec *codec)
 	snd_soc_add_codec_controls(codec,
 			tasha_analog_gain_controls,
 			ARRAY_SIZE(tasha_analog_gain_controls));
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+	snd_soc_add_codec_controls(codec,
+			mic_bias2_enable,
+			ARRAY_SIZE(mic_bias2_enable));
+#endif
 	control->num_rx_port = TASHA_RX_MAX;
 	control->rx_chs = ptr;
 	memcpy(control->rx_chs, tasha_rx_chs, sizeof(tasha_rx_chs));
@@ -13244,6 +13374,28 @@ static int tasha_codec_probe(struct snd_soc_codec *codec)
 	snd_soc_dapm_disable_pin(dapm, "ANC EAR");
 	mutex_unlock(&codec->mutex);
 	snd_soc_dapm_sync(dapm);
+
+#ifdef CONFIG_VENDOR_SMARTISAN_SURABAYA
+	lineout_hph_swch = pdata->lineout_hph_switch;
+	if (gpio_is_valid(lineout_hph_swch)) {
+		ret = gpio_request(lineout_hph_swch, "lineout_hph_switch");
+		if (ret) {
+			pr_err("%s: Failed to request gpio %d\n", __func__,
+				lineout_hph_swch);
+			lineout_hph_swch = 0;
+		}
+	}
+
+	ext_pa_en = pdata->ext_pa_enable;
+	if (gpio_is_valid(ext_pa_en)) {
+		ret = gpio_request(ext_pa_en, "external_pa_enable");
+		if (ret) {
+			pr_err("%s: Failed to request gpio %d\n", __func__,
+				ext_pa_en);
+			ext_pa_en = 0;
+		}
+	}
+#endif
 
 	return ret;
 
@@ -13744,6 +13896,10 @@ static int tasha_probe(struct platform_device *pdev)
 	mutex_init(&tasha->swr_write_lock);
 	mutex_init(&tasha->swr_clk_lock);
 
+#ifdef CONFIG_VENDOR_SMARTISAN_SURABAYA
+	INIT_DELAYED_WORK(&tasha->ext_pa_pwrdwn_dwork, ext_pa_powerdown_work);
+#endif
+
 	cdc_pwr = devm_kzalloc(&pdev->dev, sizeof(struct wcd9xxx_power_region),
 			       GFP_KERNEL);
 	if (!cdc_pwr) {
@@ -13814,6 +13970,16 @@ static int tasha_probe(struct platform_device *pdev)
 	tasha_update_reg_defaults(tasha);
 	schedule_work(&tasha->swr_add_devices_work);
 	tasha_get_codec_ver(tasha);
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+	if (of_board_is_surabaya_p1() ||
+	    of_board_is_surabaya_p2() ||
+	    of_board_is_colombo_p1() ||
+	    of_board_is_colombo_p2()) {
+		gpio_direction_output(UART_HEADSET_SEL, 0);
+		usleep_range(10000, 10000);
+	}
+#endif
 
 	dev_info(&pdev->dev, "%s: Tasha driver probe done\n", __func__);
 	return ret;

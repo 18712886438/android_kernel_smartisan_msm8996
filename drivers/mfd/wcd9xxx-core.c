@@ -2761,6 +2761,26 @@ static struct wcd9xxx_pdata *wcd9xxx_populate_dt_pdata(struct device *dev)
 		}
 		dev_dbg(dev, "%s: reset gpio %d", __func__, pdata->reset_gpio);
 	}
+#ifdef CONFIG_VENDOR_SMARTISAN
+	pdata->lineout_hph_switch = of_get_named_gpio(dev->of_node,
+				"qcom,lineout-hph-switch", 0);
+	if (pdata->lineout_hph_switch < 0) {
+		dev_err(dev, "Looking up %s property in node %s failed %d\n",
+			"qcom,lineout-hph-switch", dev->of_node->full_name,
+			pdata->lineout_hph_switch);
+		goto err;
+	}
+	dev_dbg(dev, "%s: lineout or hph switch gpio %d", __func__, pdata->lineout_hph_switch);
+	pdata->ext_pa_enable = of_get_named_gpio(dev->of_node,
+				"qcom,ext-pa-enable", 0);
+	if (pdata->ext_pa_enable < 0) {
+		dev_err(dev, "Looking up %s property in node %s failed %d\n",
+			"qcom,ext-pa-enable", dev->of_node->full_name,
+			pdata->ext_pa_enable);
+		goto err;
+	}
+	dev_dbg(dev, "%s: external pa enable gpio %d", __func__, pdata->ext_pa_enable);
+#endif
 	ret = of_property_read_u32(dev->of_node,
 				   "qcom,cdc-mclk-clk-rate",
 				   &mclk_rate);
