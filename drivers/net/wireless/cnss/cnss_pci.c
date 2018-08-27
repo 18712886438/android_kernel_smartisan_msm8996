@@ -1099,8 +1099,16 @@ void cnss_setup_fw_files(u16 revision)
 	case QCA6174_FW_3_2:
 		strlcpy(penv->fw_files.image_file, "qwlan30.bin",
 			CNSS_MAX_FILE_NAME);
+#if defined CONFIG_VENDOR_SMARTISAN_SURABAYA
+		strlcpy(penv->fw_files.board_data, "surabaya.bin",
+			CNSS_MAX_FILE_NAME);
+#elif defined CONFIG_VENDOR_SMARTISAN_COLOMBO
+		strlcpy(penv->fw_files.board_data, "colombo.bin",
+			CNSS_MAX_FILE_NAME);
+#else
 		strlcpy(penv->fw_files.board_data, "bdwlan30.bin",
 			CNSS_MAX_FILE_NAME);
+#endif
 		strlcpy(penv->fw_files.otp_data, "otp30.bin",
 			CNSS_MAX_FILE_NAME);
 		strlcpy(penv->fw_files.utf_file, "utf30.bin",
