@@ -35,6 +35,10 @@
 #include <linux/string_helpers.h>
 #include <linux/alarmtimer.h>
 #include <linux/qpnp/qpnp-revid.h>
+#ifdef CONFIG_VENDOR_SMARTISAN
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
+#endif
 
 /* Register offsets */
 
@@ -190,6 +194,11 @@ struct fg_cc_soc_data {
 	int	delta_soc;
 };
 
+#ifdef CONFIG_VENDOR_SMARTISAN
+static struct proc_dir_entry *proc_dir, *proc_file;
+static bool ready_loaded = false;
+#endif
+
 /* FG_MEMIF setting index */
 enum fg_mem_setting_index {
 	FG_MEM_SOFT_COLD = 0,
@@ -325,7 +334,15 @@ module_param_named(
 	first_est_dump, fg_est_dump, int, S_IRUSR | S_IWUSR
 );
 
+#ifdef CONFIG_VENDOR_SMARTISAN
+#ifdef CONFIG_BATTERY_COLOMBO
+static char *fg_batt_type = "smartisan_4000mah";
+#else // CONFIG_BATTERY_COLOMBO
+static char *fg_batt_type = "smartisan_3000mah";
+#endif // CONFIG_BATTERY_COLOMBO
+#else // CONFIG_VENDOR_SMARTISAN
 static char *fg_batt_type;
+#endif // CONFIG_VENDOR_SMARTISAN
 module_param_named(
 	battery_type, fg_batt_type, charp, S_IRUSR | S_IWUSR
 );
@@ -564,6 +581,9 @@ struct fg_chip {
 	int			actual_cap_uah;
 	int			status;
 	int			prev_status;
+#ifdef CONFIG_VENDOR_SMARTISAN
+	int			prev_soc;
+#endif
 	int			health;
 	enum fg_batt_aging_mode	batt_aging_mode;
 	struct alarm		hard_jeita_alarm;
@@ -2714,6 +2734,9 @@ static void update_sram_data_work(struct work_struct *work)
 				struct fg_chip,
 				update_sram_data.work);
 	int resched_ms, ret;
+#ifdef CONFIG_VENDOR_SMARTISAN
+	int capacity;
+#endif
 	bool tried_again = false;
 	int rc = 0;
 
@@ -2736,6 +2759,16 @@ wait:
 		goto out;
 	}
 	rc = update_sram_data(chip, &resched_ms);
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+	/* Workaround for avoiding appear SOC transition. */
+	capacity = get_prop_capacity(chip);
+	if (capacity != chip->prev_soc) {
+		chip->prev_soc = capacity;
+		if (chip->power_supply_registered)
+			power_supply_changed(&chip->bms_psy);
+	}
+#endif
 
 out:
 	if (!rc)
@@ -4034,8 +4067,14 @@ static void status_change_work(struct work_struct *work)
 	}
 
 	if (chip->status == POWER_SUPPLY_STATUS_FULL) {
+#ifdef CONFIG_VENDOR_SMARTISAN
+		if (capacity >= 99 && chip->hold_soc_while_full
+				&& (chip->health == POWER_SUPPLY_HEALTH_GOOD ||
+				    chip->health == POWER_SUPPLY_HEALTH_COOL)) {
+#else
 		if (capacity >= 99 && chip->hold_soc_while_full
 				&& chip->health == POWER_SUPPLY_HEALTH_GOOD) {
+#endif
 			if (fg_debug_mask & FG_STATUS)
 				pr_info("holding soc at 100\n");
 			chip->charge_full = true;
@@ -6306,6 +6345,48 @@ fail:
 	return -EINVAL;
 }
 
+#ifdef CONFIG_VENDOR_SMARTISAN
+static int proc_batt_ready_show(struct seq_file *m, void *v)
+{
+	int len;
+	len = seq_printf(m, "%s\n", ready_loaded? "1":"0");
+	return len;
+}
+
+static int proc_batt_ready_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, proc_batt_ready_show, NULL);
+}
+
+static const struct file_operations proc_batt_ready_fops = {
+	.owner      = THIS_MODULE,
+	.open       = proc_batt_ready_open,
+	.read       = seq_read,
+	.llseek     = seq_lseek,
+	.release    = single_release,
+};
+
+static int init_proc_load_profile(void)
+{
+	int ret = 0;
+
+	proc_dir=proc_mkdir("batt_load", NULL);
+	if (proc_dir == NULL){
+		ret = -ENOMEM;
+		return ret;
+	}
+
+	proc_file = proc_create("ready", 0, proc_dir, &proc_batt_ready_fops);
+	if (proc_file == NULL) {
+		remove_proc_entry("batt_load", NULL);
+		ret = -ENOMEM;
+		return ret;
+	}
+
+	return 0;
+}
+#endif
+
 #define FG_PROFILE_LEN			128
 #define PROFILE_COMPARE_LEN		32
 #define THERMAL_COEFF_ADDR		0x444
@@ -6578,6 +6659,11 @@ done:
 	chip->first_profile_loaded = true;
 	chip->profile_loaded = true;
 	chip->soc_reporting_ready = true;
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+	ready_loaded = true; //flag to load battery profile for healthd.
+#endif
+
 	chip->battery_missing = is_battery_missing(chip);
 	update_chg_iterm(chip);
 	update_cc_cv_setpoint(chip);
@@ -8708,6 +8794,10 @@ static int fg_probe(struct spmi_device *spmi)
 
 	chip->spmi = spmi;
 	chip->dev = &(spmi->dev);
+
+#ifdef CONFIG_VENDOR_SMARTISAN
+	init_proc_load_profile();
+#endif
 
 	wakeup_source_init(&chip->empty_check_wakeup_source.source,
 			"qpnp_fg_empty_check");
