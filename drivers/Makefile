@@ -172,3 +172,9 @@ obj-$(CONFIG_BIF)		+= bif/
 
 obj-$(CONFIG_SENSORS)		+= sensors/
 obj-$(CONFIG_SENSORS_SSC)	+= sensors/
+
+ifdef CONFIG_VENDOR_SMARTISAN
+obj-$(CONFIG_P61_NFC) += ese-nxp/
+obj-y += fingerprint/
+obj-y += smartisan/
+endif

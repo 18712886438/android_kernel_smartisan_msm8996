@@ -196,4 +196,8 @@ source "drivers/firmware/Kconfig"
 
 source "drivers/bif/Kconfig"
 
+source "drivers/ese-nxp/Kconfig"
+
+source "drivers/fingerprint/Kconfig"
+
 endmenu
