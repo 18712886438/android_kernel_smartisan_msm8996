@@ -378,7 +378,7 @@ static int32_t msm_ois_power_down(struct msm_ois_ctrl_t *o_ctrl)
 				pr_err("%s failed %d\n",__func__,__LINE__);
 				return rc;
 			}
-
+		}
 
 		for (gpio = SENSOR_GPIO_AF_PWDM; gpio < SENSOR_GPIO_MAX;
 			gpio++) {

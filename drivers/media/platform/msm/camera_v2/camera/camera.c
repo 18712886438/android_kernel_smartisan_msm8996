@@ -35,6 +35,8 @@
 #define fh_to_private(__fh) \
 	container_of(__fh, struct camera_v4l2_private, fh)
 
+static struct msm_video_device *g_mvideo[32];
+
 struct camera_v4l2_private {
 	struct v4l2_fh fh;
 	unsigned int stream_id;
@@ -861,6 +863,35 @@ static struct v4l2_file_operations camera_v4l2_fops = {
 #endif
 };
 
+int camera_deinit_v4l2(unsigned int session)
+{
+	struct msm_video_device *pvdev;
+	struct v4l2_device *v4l2_dev;
+	struct media_entity *entity;
+	struct media_entity *next;
+	pvdev = g_mvideo[session];
+	pr_err("XiaYang:%s enter\n",__func__);
+	if(!pvdev){
+		pr_err("%s: cannot get msm_video_device from session\n",__func__);
+		return -1;
+	}
+	v4l2_dev = pvdev->vdev->v4l2_dev;
+	v4l2_device_unregister(pvdev->vdev->v4l2_dev);
+#if defined(CONFIG_MEDIA_CONTROLLER)
+	list_for_each_entry_safe(entity, next, &v4l2_dev->mdev->entities, list)
+		media_device_unregister_entity(entity);
+	media_entity_cleanup(&pvdev->vdev->entity);
+//	media_device_unregister(v4l2_dev->mdev);
+//	kzfree(v4l2_dev->mdev);
+#endif
+//	kzfree(v4l2_dev);
+//	video_device_release(pvdev->vdev);
+//	kzfree(pvdev);
+	g_mvideo[session] = NULL;
+	return 0;
+
+}
+
 int camera_init_v4l2(struct device *dev, unsigned int *session)
 {
 	struct msm_video_device *pvdev;
@@ -955,5 +986,6 @@ v4l2_fail:
 video_fail:
 	kzfree(pvdev);
 init_end:
+	g_mvideo[pvdev->vdev->num] = pvdev;
 	return rc;
 }
