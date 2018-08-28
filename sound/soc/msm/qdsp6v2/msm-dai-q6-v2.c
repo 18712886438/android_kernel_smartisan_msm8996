@@ -3280,7 +3280,8 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rates = SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_8000 |
 			SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_96000 |
 			SNDRV_PCM_RATE_192000,
-			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE |
+				SNDRV_PCM_FMTBIT_S24_LE,
 			.rate_min =     8000,
 			.rate_max =     192000,
 		},
@@ -3303,10 +3304,14 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.stream_name = "Tertiary MI2S Playback",
 			.aif_name = "TERT_MI2S_RX",
 			.rates = SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_8000 |
-			SNDRV_PCM_RATE_16000,
-			.formats = SNDRV_PCM_FMTBIT_S16_LE,
-			.rate_min =     8000,
-			.rate_max =     48000,
+			SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_96000 |
+			SNDRV_PCM_RATE_192000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE |
+				SNDRV_PCM_FMTBIT_S24_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min = 8000,
+			.rate_max = 192000,
 		},
 		.capture = {
 			.stream_name = "Tertiary MI2S Capture",
@@ -3552,6 +3557,8 @@ static int msm_dai_q6_mi2s_dev_probe(struct platform_device *pdev)
 	u32 tx_line = 0;
 	u32  rx_line = 0;
 	u32 mi2s_intf = 0;
+	u32 mi2s_slave = 0;
+	u32 mi2s_ext_mclk_rate = 0;
 	struct msm_mi2s_pdata *mi2s_pdata;
 	int rc;
 
@@ -3599,11 +3606,28 @@ static int msm_dai_q6_mi2s_dev_probe(struct platform_device *pdev)
 			"qcom,msm-mi2s-tx-lines");
 		goto free_pdata;
 	}
-	dev_dbg(&pdev->dev, "dev name %s Rx line 0x%x , Tx ine 0x%x\n",
-		dev_name(&pdev->dev), rx_line, tx_line);
+
+	rc = of_property_read_u32(pdev->dev.of_node, "qcom,msm-mi2s-slave",
+				  &mi2s_slave);
+	if (rc) {
+		dev_dbg(&pdev->dev, "%s: %s Not found, defaulting to Master\n",
+			__func__, "qcom,msm-mi2s-slave");
+	}
+
+	rc = of_property_read_u32(pdev->dev.of_node, "qcom,msm-mi2s-ext-mclk",
+				  &mi2s_ext_mclk_rate);
+	if (rc) {
+		dev_dbg(&pdev->dev, "%s: %s Not found\n",
+			__func__, "qcom,msm-mi2s-ext-mclk");
+	}
+
+	dev_dbg(&pdev->dev, "dev name %s Rx line 0x%x, Tx line 0x%x, slave %d, mi2s_ext_mclk_rate %u\n",
+		dev_name(&pdev->dev), rx_line, tx_line, mi2s_slave, mi2s_ext_mclk_rate);
 	mi2s_pdata->rx_sd_lines = rx_line;
 	mi2s_pdata->tx_sd_lines = tx_line;
 	mi2s_pdata->intf_id = mi2s_intf;
+	mi2s_pdata->slave = mi2s_slave;
+	mi2s_pdata->ext_mclk_rate = mi2s_ext_mclk_rate;
 
 	dai_data = kzalloc(sizeof(struct msm_dai_q6_mi2s_dai_data),
 			   GFP_KERNEL);
