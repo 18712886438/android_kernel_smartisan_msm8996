@@ -327,8 +327,8 @@ int panel_debug_register_base(const char *name, void __iomem *base,
 
 	dbg->base = base;
 	dbg->max_offset = max_offset;
-	dbg->off = 0x0a;
-	dbg->cnt = 0x01;
+	dbg->off = 0xAB;
+	dbg->cnt = 0x02;
 	dbg->cmd_data_type = DTYPE_DCS_LWRITE;
 
 	if (name)
