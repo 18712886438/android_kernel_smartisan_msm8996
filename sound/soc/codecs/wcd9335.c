@@ -4129,6 +4129,17 @@ static int tasha_codec_enable_lineout_pa(struct snd_soc_dapm_widget *w,
 		tasha_codec_override(codec, CLS_AB, event);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
+#ifdef CONFIG_SMARTISAN_SURABAYA
+		if (!strncmp("LINEOUT1", w->name, 8)) {
+			if (gpio_get_value_cansleep(lineout_hph_swch) == 1) {
+				cancel_delayed_work_sync(&tasha->ext_pa_pwrdwn_dwork);
+				dev_dbg(codec->dev, "%s delay to power down external pa\n", __func__);
+				schedule_delayed_work(&tasha->ext_pa_pwrdwn_dwork,
+						      msecs_to_jiffies(600));
+			}
+		}
+#endif
+
 		/* 5ms sleep is required after PA is disabled as per
 		 * HW requirement
 		 */
