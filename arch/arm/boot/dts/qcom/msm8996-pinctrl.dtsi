@@ -367,6 +367,7 @@
 			};
 		};
 
+/*
 		mdss_hdmi_hpd_active: mdss_hdmi_hpd_active {
 			mux {
 				pins = "gpio34";
@@ -444,6 +445,7 @@
 				bias-pull-up;
 			};
 		};
+*/
 
 		usb_hub_reset_active: usb_hub_reset_active {
 			usb_hub_reset_active {
@@ -923,6 +925,7 @@
 			};
 		};
 
+/*
 		pmx_nfc_reset {
 			nfc_disable_active: active {
 				mux {
@@ -950,6 +953,7 @@
 				};
 			};
 		};
+*/
 
 		spi_0 {
 			spi_0_active: spi_0_active {
@@ -1007,38 +1011,6 @@
 					pins = "gpio24", "gpio90";
 					drive-strength = <6>;
 					bias-pull-up;
-				};
-			};
-		};
-
-		spi_9 {
-			spi_9_active: spi_9_active {
-				mux {
-					pins = "gpio49", "gpio50", "gpio51",
-								"gpio52";
-					function = "blsp_spi9";
-				};
-
-				config {
-					pins = "gpio49", "gpio50", "gpio51",
-								"gpio52";
-					drive-strength = <6>;
-					bias-disable;
-				};
-			};
-
-			spi_9_sleep: spi_9_sleep {
-				mux {
-					pins = "gpio49", "gpio50", "gpio51",
-								"gpio52";
-					function = "blsp_spi9";
-				};
-
-				config {
-					pins = "gpio49", "gpio50", "gpio51",
-								"gpio52";
-					drive-strength = <6>;
-					bias-disable;
 				};
 			};
 		};
@@ -2425,6 +2397,7 @@
 			};
 		};
 
+/*
 		seta_15: seta_15 {
 			mux {
 				pins = "gpio86";
@@ -2437,6 +2410,7 @@
 				bias-disable;
 			};
 		};
+*/
 
 		seta_16: seta_16 {
 			mux {
@@ -2672,7 +2646,7 @@
 			};
 		};
 
-		setb_16: setb_16 {
+/*		setb_16: setb_16 {
 			mux {
 				pins = "gpio92";
 				function = "qdss_tracedata_b";
@@ -2683,7 +2657,7 @@
 				drive-strength = <16>;
 				bias-disable;
 			};
-		};
+		};*/
 
 		setb_17: setb_17 {
 			mux {
@@ -2755,23 +2729,23 @@
 		};
 
 		tsif1_signals_active: tsif1_signals_active {
-			tsif2_clk {
-				pins = "gpio93"; /* TSIF1 CLK */
-				function = "tsif2_clk";
-			};
-			tsif2_en {
-				pins = "gpio94"; /* TSIF1 Enable */
-				function = "tsif2_en";
-			};
-			tsif2_data {
-				pins = "gpio95"; /* TSIF1 DATA */
-				function = "tsif2_data";
-			};
-			signals_cfg {
-				pins = "gpio93", "gpio94", "gpio95";
-				drive_strength = <2>;	/* 2 mA */
-				bias-pull-down;		/* pull down */
-			};
+//			tsif2_clk {
+//				pins = "gpio93"; /* TSIF1 CLK */
+//				function = "tsif2_clk";
+//			};
+//			tsif2_en {
+//				pins = "gpio94"; /* TSIF1 Enable */
+//				function = "tsif2_en";
+//			};
+//			tsif2_data {
+//				pins = "gpio95"; /* TSIF1 DATA */
+//				function = "tsif2_data";
+//			};
+//			signals_cfg {
+//				pins = "gpio93", "gpio94", "gpio95";
+//				drive_strength = <2>;	/* 2 mA */
+//				bias-pull-down;		/* pull down */
+//			};
 		};
 
 		/* sync signal is only used if configured to mode-2 */

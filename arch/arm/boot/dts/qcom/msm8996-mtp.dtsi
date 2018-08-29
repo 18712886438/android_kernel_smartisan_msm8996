@@ -272,6 +272,7 @@
 	};
 };
 
+/*
 &mdss_hdmi_tx {
 	pinctrl-names = "hdmi_hpd_active", "hdmi_ddc_active", "hdmi_cec_active",
 				"hdmi_active", "hdmi_sleep";
@@ -286,6 +287,7 @@
 	pinctrl-4 = <&mdss_hdmi_hpd_suspend &mdss_hdmi_ddc_suspend
 						&mdss_hdmi_cec_suspend>;
 };
+*/
 
 &pmi8994_vadc {
 	chan@0 {
@@ -343,6 +345,7 @@
 	hw-config = "split_dsi";
 };
 
+/*
 &mdss_dsi0 {
 	qcom,dsi-pref-prim-pan = <&dsi_dual_sharp_video>;
 	pinctrl-names = "mdss_default", "mdss_sleep";
@@ -362,6 +365,7 @@
 	qcom,platform-reset-gpio = <&tlmm 8 0>;
 	qcom,platform-bklight-en-gpio = <&pm8994_gpios 14 0>;
 };
+*/
 
 &labibb {
 	status = "ok";
@@ -622,6 +626,7 @@
 
 &soc {
 	i2c@75ba000 {
+		/*
 		synaptics@20 {
 			compatible = "synaptics,dsx";
 			reg = <0x20>;
@@ -638,11 +643,10 @@
 			synaptics,irq-gpio = <&tlmm 125 0x2008>;
 			synaptics,disable-gpios;
 			synaptics,fw-name = "PR1702898-s3528t_00350002.img";
-			/* Underlying clocks used by secure touch */
 			clock-names = "iface_clk", "core_clk";
 			clocks = <&clock_gcc clk_gcc_blsp2_ahb_clk>,
 				 <&clock_gcc clk_gcc_blsp2_qup6_i2c_apps_clk>;
-		};
+		};*/
 	};
 
 	gen-vkeys {
@@ -655,7 +659,7 @@
 		qcom,key-codes = <158 139 102 217>;
 	};
 
-	gpio_keys {
+	/***gpio_keys {
 		compatible = "gpio-keys";
 		input-name = "gpio-keys";
 
@@ -685,7 +689,7 @@
 			gpio-key,wakeup;
 			debounce-interval = <15>;
 		};
-	};
+	};*****/
 
 };
 
@@ -837,10 +841,10 @@
 		reg = <0x51>;
 	};
 };
-
+/*
 &i2c_7 {
-	silabs4705@11 { /* SiLabs FM chip, slave id 0x11*/
-		status = "ok";
+	silabs4705@11 { *//* SiLabs FM chip, slave id 0x11*/
+/*		status = "ok";
 		compatible = "silabs,si4705";
 		reg = <0x11>;
 		vdd-supply = <&pm8994_s4>;
@@ -864,8 +868,9 @@
 		interrupt-names = "silabs_fm_int", "silabs_fm_status_int";
 	};
 };
-
-&i2c_8 { /* BLSP2 QUP2 */
+*/
+/*
+&i2c_8 {  BLSP2 QUP2 
 	nq@28 {
 		compatible = "qcom,nq-nci";
 		reg = <0x28>;
@@ -884,7 +889,8 @@
 		clock-names = "ref_clk";
 	};
 };
+*/
 
-&wil6210 {
-	status = "disabled";
-};
+//&wil6210 {
+//	status = "ok";
+//};
