@@ -17,6 +17,7 @@
 #include "camera.h"
 #include "msm_cci.h"
 #include "msm_camera_dt_util.h"
+#include <media/v4l2-device.h>
 
 /* Logging macro */
 #undef CDBG
@@ -160,6 +161,49 @@ static int32_t msm_sensor_driver_create_v4l_subdev
 		&msm_sensor_v4l2_subdev_fops;
 
 	return rc;
+}
+
+static int32_t msm_sensor_v4l_subdev_entity_deinit(unsigned int cameraid)
+{
+	struct msm_sensor_ctrl_t *s_ctrl = NULL;
+#if defined(CONFIG_MEDIA_CONTROLLER)
+/*	struct media_entity *entity;
+	struct media_entity *next;
+	struct media_device *mdev;
+	struct v4l2_device *v4l2_dev;
+*/
+#endif
+	if(cameraid >= MAX_CAMERAS){
+		pr_err("%s: cameraid=%d falied\n",__func__,cameraid);
+		return -1;
+	}
+	s_ctrl = g_sctrl[cameraid];
+	if(s_ctrl == NULL){
+		pr_err("%s: can't get subdev control, failed\n",__func__);
+		return -1;
+	}
+#if defined(CONFIG_MEDIA_CONTROLLER)
+/*	v4l2_dev = (struct v4l2_device *)s_ctrl->msm_sd.sd.v4l2_dev;
+	if(v4l2_dev != NULL)
+	{
+		pr_err("XiaYang: target entity->id=%d\n",s_ctrl->msm_sd.sd.entity.id);
+		mdev = (struct media_device *)v4l2_dev->mdev;
+		list_for_each_entry_safe(entity, next, &mdev->entities, list)
+		{
+			pr_err("XiaYang: entity->id=%d\n",entity->id);
+			if(entity->id > s_ctrl->msm_sd.sd.entity.id)
+			entity->id--;
+
+		}
+	}
+	media_device_unregister_entity(&s_ctrl->msm_sd.sd.entity);
+	media_entity_cleanup(&s_ctrl->msm_sd.sd.entity);
+*/
+	s_ctrl->msm_sd.sd.entity.type = 0;
+#endif
+	return 0;
+
+
 }
 
 static int32_t msm_sensor_fill_eeprom_subdevid_by_name(
@@ -331,6 +375,53 @@ static int32_t msm_sensor_fill_ois_subdevid_by_name(
 			return -EINVAL;
 		}
 		*ois_subdev_id = val;
+		of_node_put(src_node);
+		src_node = NULL;
+	}
+
+	return rc;
+}
+
+static int32_t msm_sensor_fill_tof_subdevid_by_name(
+				struct msm_sensor_ctrl_t *s_ctrl)
+{
+	int32_t rc = 0;
+	struct device_node *src_node = NULL;
+	uint32_t val = 0, tof_name_len;
+	int32_t *tof_subdev_id;
+	struct  msm_sensor_info_t *sensor_info;
+	struct device_node *of_node = s_ctrl->of_node;
+
+	if (!s_ctrl->sensordata->tof_name || !of_node)
+		return -EINVAL;
+
+	tof_name_len = strlen(s_ctrl->sensordata->tof_name);
+	if (tof_name_len >= MAX_SENSOR_NAME)
+		return -EINVAL;
+
+	sensor_info = s_ctrl->sensordata->sensor_info;
+	tof_subdev_id = &sensor_info->subdev_id[SUB_MODULE_TOF];
+	/*
+	 * string for tof name is valid, set sudev id to -1
+	 * and try to found new id
+	 */
+	*tof_subdev_id = -1;
+
+	if (0 == tof_name_len)
+		return 0;
+
+	src_node = of_parse_phandle(of_node, "qcom,tof-src", 0);
+	if (!src_node) {
+		CDBG("%s:%d src_node NULL\n", __func__, __LINE__);
+	} else {
+		rc = of_property_read_u32(src_node, "cell-index", &val);
+		CDBG("%s qcom,tof cell index %d, rc %d\n", __func__,
+			val, rc);
+		if (rc < 0) {
+			pr_err("%s failed %d\n", __func__, __LINE__);
+			return -EINVAL;
+		}
+		*tof_subdev_id = val;
 		of_node_put(src_node);
 		src_node = NULL;
 	}
@@ -635,6 +726,36 @@ static void msm_sensor_fill_sensor_info(struct msm_sensor_ctrl_t *s_ctrl,
 	strlcpy(entity_name, s_ctrl->msm_sd.sd.entity.name, MAX_SENSOR_NAME);
 }
 
+int32_t msm_sensor_unregister(void *setting)
+{
+//	uint8_t camera_id = 0;
+	uint32_t session = 0;
+	uint32_t cameraid = 0;
+	uint32_t sessionid = 0;
+//	uint32_t rc = 0;
+        int32_t rc = 0;
+//	struct msm_sensor_ctrl_t   *s_ctrl = NULL;
+	pr_err("XiaYang: Enter in msm_sensor_unregister\n");
+	if(copy_from_user(&session, setting, sizeof(session)))
+	{
+		pr_err("%s: failed copy_from_user\n",__func__);
+		return -EFAULT;
+	}
+	pr_err("%s[XiaYang]: session_id=%x\n",__func__,session);
+	sessionid = session & 0x0000FFFF;
+	cameraid = (session & 0xFFFF0000) >> 16;
+//	s_ctrl = g_sctrl[camera_id];
+//	if(!s_ctrl){
+//		pr_err("%s: s_ctrl NULL error",__func__);
+//		return -EINVAL;
+//	}
+//	rc = msm_sd_unregister(&s_ctrl->msm_sd);
+	rc = camera_deinit_v4l2(sessionid);
+	rc = msm_sensor_v4l_subdev_entity_deinit(cameraid);
+	pr_err("%s[XiaYang]: rc=%d\n",__func__,rc);
+	return rc;
+}
+
 /* static function definition */
 int32_t msm_sensor_driver_probe(void *setting,
 	struct msm_sensor_info_t *probed_info, char *entity_name)
@@ -687,6 +808,9 @@ int32_t msm_sensor_driver_probe(void *setting,
 
 		strlcpy(slave_info->ois_name, slave_info32->ois_name,
 			sizeof(slave_info->ois_name));
+
+        strlcpy(slave_info->tof_name, slave_info32->tof_name,
+			sizeof(slave_info->tof_name));
 
 		strlcpy(slave_info->flash_name, slave_info32->flash_name,
 			sizeof(slave_info->flash_name));
@@ -884,7 +1008,8 @@ CSID_TG:
 	s_ctrl->sensordata->eeprom_name = slave_info->eeprom_name;
 	s_ctrl->sensordata->actuator_name = slave_info->actuator_name;
 	s_ctrl->sensordata->ois_name = slave_info->ois_name;
-	/*
+	s_ctrl->sensordata->tof_name = slave_info->tof_name;
+        /*
 	 * Update eeporm subdevice Id by input eeprom name
 	 */
 	rc = msm_sensor_fill_eeprom_subdevid_by_name(s_ctrl);
@@ -902,6 +1027,12 @@ CSID_TG:
 	}
 
 	rc = msm_sensor_fill_ois_subdevid_by_name(s_ctrl);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto free_camera_info;
+	}
+
+	rc = msm_sensor_fill_tof_subdevid_by_name(s_ctrl);
 	if (rc < 0) {
 		pr_err("%s failed %d\n", __func__, __LINE__);
 		goto free_camera_info;

@@ -26,12 +26,33 @@ DEFINE_MSM_MUTEX(msm_ois_mutex);
 #else
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 #endif
+#define CAM_SENSOR_PINCTRL_STATE_SLEEP "cam_suspend"
+#define CAM_SENSOR_PINCTRL_STATE_DEFAULT "cam_default"
+#define CAM_SENSOR_SHARED_PINCTRL_STATE_SLEEP "cam_shared_suspend"
+#define CAM_SENSOR_SHARED_PINCTRL_STATE_DEFAULT "cam_shared_default"
 
 static struct v4l2_file_operations msm_ois_v4l2_subdev_fops;
 static int32_t msm_ois_power_up(struct msm_ois_ctrl_t *o_ctrl);
 static int32_t msm_ois_power_down(struct msm_ois_ctrl_t *o_ctrl);
 
 static struct i2c_driver msm_ois_i2c_driver;
+static struct msm_cam_clk_info cam_8974_clk_info[] = {
+	[SENSOR_CAM_MCLK] = {"cam_src_clk", 24000000},
+	[SENSOR_CAM_CLK] = {"cam_clk", 0},
+};
+
+static uint8_t msm_ois_atoi(char i) {
+	uint8_t output = 0;
+	if ('0' <= i &&   i <= '9')
+		output = i - 48;
+	else if ('a' <= i && i <= 'f')
+		output = i - 87;
+	else if ('A' <= i && i <= 'F')
+		output = i - 55;
+	else
+		output = 0;
+	return output;
+}
 
 static int32_t msm_ois_download(struct msm_ois_ctrl_t *o_ctrl)
 {
@@ -201,6 +222,46 @@ static int32_t msm_ois_write_settings(struct msm_ois_ctrl_t *o_ctrl,
 				if (rc < 0)
 					return rc;
 				break;
+			case MSM_CAMERA_I2C_SEQ_DATA: {
+				char *reg_data;
+				int data_size;
+				int j = 0;
+				if (!settings[i].reg_data_seq)
+					break;
+				if (settings[i].data_size <= 0)
+					break;
+				data_size = settings[i].data_size * 2;
+				reg_data = kzalloc(data_size, GFP_KERNEL);
+				if (!reg_data)
+					return -ENOMEM;
+				rc = copy_from_user((void *)reg_data, compat_ptr(settings[i].reg_data_seq), data_size);
+				reg_setting =
+					kzalloc(sizeof(struct msm_camera_i2c_seq_reg_array),
+					GFP_KERNEL);
+				if (!reg_setting)
+					return -ENOMEM;
+
+				reg_setting->reg_addr = settings[i].reg_addr;
+				while (j < data_size) {
+					char byte_data0 = reg_data[j];
+					char byte_data1 = reg_data[j + 1];
+					reg_setting->reg_data[j / 2] = (uint8_t)msm_ois_atoi(byte_data0) * 16 + msm_ois_atoi(byte_data1);
+					j += 2;
+				}
+	 	 		reg_setting->reg_data_size = data_size / 2;
+				rc = o_ctrl->i2c_client.i2c_func_tbl->
+					i2c_write_seq(&o_ctrl->i2c_client,
+					reg_setting->reg_addr,
+					reg_setting->reg_data,
+					reg_setting->reg_data_size);
+				kfree(reg_setting);
+				kfree(reg_data);
+				reg_setting = NULL;
+				reg_data = NULL;
+				if (rc < 0)
+					return rc;
+				}
+				break;
 
 			default:
 				pr_err("Unsupport data type: %d\n",
@@ -281,6 +342,42 @@ static int32_t msm_ois_power_down(struct msm_ois_ctrl_t *o_ctrl)
 		if (rc < 0) {
 			pr_err("%s failed %d\n", __func__, __LINE__);
 			return rc;
+		}
+		
+		rc = msm_cam_clk_enable(&o_ctrl->pdev->dev,
+				cam_8974_clk_info,
+				&o_ctrl->clk[0],
+				sizeof(cam_8974_clk_info) / sizeof(cam_8974_clk_info[0]),
+				0);
+		if (rc < 0) {
+			pr_err("%s: clk enable failed\n",
+			__func__);
+			return rc;
+		}
+
+		if (o_ctrl->shared_power_flag == 1) {
+			rc = msm_camera_request_gpio_table(
+				 o_ctrl->shared_gpio_cfg.cam_gconf->cam_gpio_req_tbl,
+				 o_ctrl->shared_gpio_cfg.cam_gconf->cam_gpio_req_tbl_size, 1);
+			if(rc < 0){
+				pr_err("%s failed %d\n",__func__,__LINE__);
+				return rc;
+			}
+
+			gpio_set_value_cansleep(o_ctrl->shared_gpio_cfg.cam_gconf->gpio_num_info->gpio_num[SENSOR_SHARED_GPIO_VDIG],0);
+			rc = pinctrl_select_state(o_ctrl->shared_gpio_cfg.pinctrl_info.pinctrl,
+				o_ctrl->shared_gpio_cfg.pinctrl_info.gpio_state_suspend);
+			if(rc < 0){
+				pr_err("%s failed %d\n",__func__,__LINE__);
+				return rc;
+			}
+			rc = msm_camera_request_gpio_table(
+				 o_ctrl->shared_gpio_cfg.cam_gconf->cam_gpio_req_tbl,
+				 o_ctrl->shared_gpio_cfg.cam_gconf->cam_gpio_req_tbl_size, 0);
+			if(rc < 0){
+				pr_err("%s failed %d\n",__func__,__LINE__);
+				return rc;
+			}
 		}
 
 		for (gpio = SENSOR_GPIO_AF_PWDM; gpio < SENSOR_GPIO_MAX;
@@ -419,11 +516,14 @@ static int32_t msm_ois_config(struct msm_ois_ctrl_t *o_ctrl,
 			pr_err("msm_ois_init failed %d\n", rc);
 		break;
 	case CFG_OIS_POWERDOWN:
+		o_ctrl->shared_power_flag = cdata->cfg.shared_power_flag;
 		rc = msm_ois_power_down(o_ctrl);
 		if (rc < 0)
 			pr_err("msm_ois_power_down failed %d\n", rc);
 		break;
 	case CFG_OIS_POWERUP:
+		o_ctrl->shared_power_flag = cdata->cfg.shared_power_flag;
+
 		rc = msm_ois_power_up(o_ctrl);
 		if (rc < 0)
 			pr_err("Failed ois power up%d\n", rc);
@@ -628,6 +728,52 @@ static long msm_ois_subdev_ioctl(struct v4l2_subdev *sd,
 	}
 }
 
+static int msm_ois_pinctrl_init(struct msm_ois_ctrl_t *ctrl)
+{
+	struct msm_pinctrl_info *ois_pctrl = NULL;
+	struct msm_pinctrl_info *shared_ois_pctrl = NULL;
+	ois_pctrl = &(ctrl->gpio_cfg.pinctrl_info);
+	shared_ois_pctrl = &(ctrl->shared_gpio_cfg.pinctrl_info);
+	ois_pctrl->pinctrl = devm_pinctrl_get(&(ctrl->pdev->dev));
+	shared_ois_pctrl->pinctrl = devm_pinctrl_get(&(ctrl->pdev->dev));
+
+#if 0
+	ois_pctrl->gpio_state_active =
+		pinctrl_lookup_state(ois_pctrl->pinctrl,CAM_SENSOR_PINCTRL_STATE_DEFAULT);
+	if (IS_ERR_OR_NULL(ois_pctrl->gpio_state_active)) {
+		pr_err("%s:%d Failed to get the active state pinctrl handle\n",
+				__func__, __LINE__);
+		return -EINVAL;
+	}
+	ois_pctrl->gpio_state_suspend =
+		pinctrl_lookup_state(ois_pctrl->pinctrl,CAM_SENSOR_PINCTRL_STATE_SLEEP);
+	if (IS_ERR_OR_NULL(ois_pctrl->gpio_state_suspend)) {
+		pr_err("%s:%d Failed to get the suspend state pinctrl handle\n",
+				__func__, __LINE__);
+		return -EINVAL;
+	}
+#endif
+
+
+	shared_ois_pctrl->gpio_state_active =
+		pinctrl_lookup_state(shared_ois_pctrl->pinctrl,CAM_SENSOR_SHARED_PINCTRL_STATE_DEFAULT);
+	if (IS_ERR_OR_NULL(shared_ois_pctrl->gpio_state_active)) {
+		pr_err("%s:%d Failed to get the active shared state pinctrl handle\n",
+				__func__, __LINE__);
+		return -EINVAL;
+	}
+	shared_ois_pctrl->gpio_state_suspend =
+		pinctrl_lookup_state(shared_ois_pctrl->pinctrl,CAM_SENSOR_SHARED_PINCTRL_STATE_SLEEP);
+	if (IS_ERR_OR_NULL(shared_ois_pctrl->gpio_state_suspend)) {
+		pr_err("%s:%d Failed to get the suspend shared state pinctrl handle\n",
+				__func__, __LINE__);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+
 static int32_t msm_ois_power_up(struct msm_ois_ctrl_t *o_ctrl)
 {
 	int rc = 0;
@@ -640,7 +786,51 @@ static int32_t msm_ois_power_up(struct msm_ois_ctrl_t *o_ctrl)
 		pr_err("%s failed %d\n", __func__, __LINE__);
 		return rc;
 	}
+	rc = msm_cam_clk_enable(&o_ctrl->pdev->dev,
+				cam_8974_clk_info,
+				&o_ctrl->clk[0],
+				sizeof(cam_8974_clk_info) / sizeof(cam_8974_clk_info[0]),
+				1);
+	if (rc < 0) {
+		pr_err("%s: clk enable failed\n",
+			__func__);
+		return rc;
+	}
+	/**************************Add OIS GPIO Support**************************/
+	rc = msm_ois_pinctrl_init(o_ctrl);
+	if(rc < 0){
+		pr_err("msm_ois_pinctrl_init failed");
+		return rc;
+	}
+	if (0 == o_ctrl->shared_power_flag)  {
+	rc = msm_camera_request_gpio_table(
+			 o_ctrl->shared_gpio_cfg.cam_gconf->cam_gpio_req_tbl,
+			 o_ctrl->shared_gpio_cfg.cam_gconf->cam_gpio_req_tbl_size, 1);
+	if(rc < 0){
+		pr_err("%s failed %d\n",__func__,__LINE__);
+		return rc;
+	}
+	rc = pinctrl_select_state(o_ctrl->shared_gpio_cfg.pinctrl_info.pinctrl,
+			o_ctrl->shared_gpio_cfg.pinctrl_info.gpio_state_active);
+	if(rc < 0){
+		pr_err("%s failed %d\n",__func__,__LINE__);
+		return rc;
+	}
+	CDBG("%s:%d gpio set val %d 2\n", __func__, __LINE__,
+	o_ctrl->shared_gpio_cfg.cam_gconf->gpio_num_info->gpio_num[SENSOR_SHARED_GPIO_VDIG]);
+	gpio_set_value_cansleep(o_ctrl->shared_gpio_cfg.cam_gconf->gpio_num_info
+			->gpio_num[SENSOR_SHARED_GPIO_VDIG],2);
+	rc = msm_camera_request_gpio_table(
+			 o_ctrl->shared_gpio_cfg.cam_gconf->cam_gpio_req_tbl,
+			 o_ctrl->shared_gpio_cfg.cam_gconf->cam_gpio_req_tbl_size, 0);
+	if(rc < 0){
+		pr_err("%s failed %d\n",__func__,__LINE__);
+		return rc;
+	}
 
+	}
+	usleep_range(100,150);
+	/****************************Add End***************************************/
 	for (gpio = SENSOR_GPIO_AF_PWDM;
 		gpio < SENSOR_GPIO_MAX; gpio++) {
 		if (o_ctrl->gconf && o_ctrl->gconf->gpio_num_info &&
@@ -782,6 +972,11 @@ static long msm_ois_subdev_do_ioctl(
 		ois_data.cfgtype = u32->cfgtype;
 
 		switch (u32->cfgtype) {
+		case CFG_OIS_POWERUP:
+		case CFG_OIS_POWERDOWN:
+			ois_data.cfg.shared_power_flag = u32->cfg.shared_power_flag;
+			parg = &ois_data;
+			break;
 		case CFG_OIS_CONTROL:
 			ois_data.cfg.set_info.ois_params.setting_size =
 				u32->cfg.set_info.ois_params.setting_size;
@@ -843,6 +1038,12 @@ static int32_t msm_ois_platform_probe(struct platform_device *pdev)
 	struct msm_camera_cci_client *cci_client = NULL;
 	struct msm_ois_ctrl_t *msm_ois_t = NULL;
 	struct msm_ois_vreg *vreg_cfg;
+	/****************Add gpio support for ois**********/
+	int i = 0;
+	struct msm_ois_gpio *gpio_cfg;
+	uint16_t gpio_array_size = 0;
+	uint16_t *gpio_array = NULL;
+	/****************Add End**************************/
 	CDBG("Enter\n");
 
 	if (!pdev->dev.of_node) {
@@ -905,7 +1106,49 @@ static int32_t msm_ois_platform_probe(struct platform_device *pdev)
 			msm_ois_t->cam_pinctrl_status = 0;
 		}
 	}
+	/**********************Add shared gpio support for ois***********************/
+	gpio_cfg = &msm_ois_t->shared_gpio_cfg;
+	gpio_array_size = of_gpio_named_count((&pdev->dev)->of_node, "shared-gpios");
+	if(gpio_array_size > 0)
+	{
+		gpio_cfg->cam_gconf = kzalloc(sizeof(struct msm_camera_gpio_conf), GFP_KERNEL);
+		gpio_array = kzalloc(sizeof(uint16_t) * gpio_array_size, GFP_KERNEL);
+		if(!gpio_cfg->cam_gconf || !gpio_array)
+		{
+			pr_err("%s:%d failed no memory\n",__func__, __LINE__);
+			kfree(msm_ois_t);
+			return -ENOMEM;
+		}
+		gpio_cfg->num_gpio = gpio_array_size;
+		for(i = 0; i < gpio_array_size; i++)
+		{
+			gpio_array[i] = of_get_named_gpio((&pdev->dev)->of_node, "shared-gpios", i);
+			pr_err("ois: gpio_array[%d] = %d", i, gpio_array[i]);
+		}
+		rc = msm_camera_get_dt_shared_gpio_req_tbl( (&pdev->dev)->of_node, gpio_cfg->cam_gconf,
+						gpio_array,gpio_array_size);
+		if(rc < 0)
+		{
+			kfree(msm_ois_t);
+			kfree(gpio_cfg->cam_gconf);
+			kfree(gpio_array);
+			pr_err("%s:%d: ois: get gpio req tbl error\n",__func__,__LINE__);
+			return rc;
+		}
 
+		rc = msm_camera_init_shared_gpio_pin_tbl((&pdev->dev)->of_node,
+				gpio_cfg->cam_gconf, gpio_array,gpio_array_size);
+		if(rc < 0)
+		{
+			kfree(msm_ois_t);
+			kfree(gpio_cfg->cam_gconf);
+			kfree(gpio_array);
+			pr_err("%s:%d: ois: get gpio pin tbl error\n",__func__,__LINE__);
+			return rc;
+		}
+
+	}
+	/************************Add End***************************************/
 	msm_ois_t->ois_v4l2_subdev_ops = &msm_ois_subdev_ops;
 	msm_ois_t->ois_mutex = &msm_ois_mutex;
 
