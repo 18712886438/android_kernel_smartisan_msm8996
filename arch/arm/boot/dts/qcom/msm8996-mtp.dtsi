@@ -321,10 +321,10 @@
 	qcom,mdss-pref-prim-intf = "dsi";
 };
 
-&sde_hdmi {
-	status = "ok";
-	qcom,hdmi-tx-hpd-gpio = <&pm8994_mpps 4 0>;
-};
+//&sde_hdmi {
+//	status = "ok";
+//	qcom,hdmi-tx-hpd-gpio = <&pm8994_mpps 4 0>;
+//};
 
 &mdss_dsi {
 	hw-config = "split_dsi";

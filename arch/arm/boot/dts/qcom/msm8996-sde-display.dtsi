@@ -349,6 +349,6 @@
 		23 19 08 08 05 03 04 a0];
 };
 
-&sde_kms {
-	connectors = <&sde_hdmi &display_manager>;
-};
+//&sde_kms {
+//	connectors = <&sde_hdmi &display_manager>;
+//};

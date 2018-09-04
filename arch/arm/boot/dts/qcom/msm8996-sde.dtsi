@@ -335,7 +335,7 @@
 			};
 		};
 	};
-
+#if 0
 	sde_hdmi: qcom,sde_hdmi@9a0000 {
 		compatible = "qcom,hdmi-tx-8996";
 
@@ -376,4 +376,5 @@
 			compatible = "qcom,msm-hdmi-audio-codec-rx";
 		};
 	};
+#endif
 };
