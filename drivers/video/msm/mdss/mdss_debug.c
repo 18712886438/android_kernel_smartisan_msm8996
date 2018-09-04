@@ -48,7 +48,7 @@
 
 static DEFINE_MUTEX(mdss_debug_lock);
 
-static char panel_reg[2] = {DEFAULT_READ_PANEL_POWER_MODE_REG, 0x00};
+static char panel_reg[3] = {DEFAULT_READ_PANEL_POWER_MODE_REG, 0x00, 0x00};
 
 static int panel_debug_base_open(struct inode *inode, struct file *file)
 {
@@ -280,8 +280,8 @@ static ssize_t panel_debug_base_reg_read(struct file *file,
 	ctrl_pdata = container_of(panel_data,
 			struct mdss_dsi_ctrl_pdata, panel_data);
 
-	mdss_dsi_panel_cmd_read(ctrl_pdata, panel_reg[0],
-		panel_reg[1], NULL, rx_buf, dbg->cnt);
+	mdss_dsi_panel_cmd_read(ctrl_pdata, panel_reg[0], panel_reg[1], panel_reg[2],
+				NULL, rx_buf, dbg->cnt);
 
 	len = scnprintf(panel_reg_buf, reg_buf_len, "0x%02zx: ", dbg->off);
 
@@ -348,8 +348,8 @@ int panel_debug_register_base(const char *name, void __iomem *base,
 
 	dbg->base = base;
 	dbg->max_offset = max_offset;
-	dbg->off = 0x0a;
-	dbg->cnt = 0x01;
+	dbg->off = 0xAB;
+	dbg->cnt = 0x02;
 	dbg->cmd_data_type = DTYPE_DCS_LWRITE;
 
 	if (name)

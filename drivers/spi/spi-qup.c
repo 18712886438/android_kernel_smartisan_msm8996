@@ -492,6 +492,8 @@ static int spi_qup_probe(struct platform_device *pdev)
 	u32 max_freq, iomode, num_cs;
 	int ret, irq, size;
 
+    printk("---ese spi spi_qup_probe run \n");
+    
 	dev = &pdev->dev;
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	base = devm_ioremap_resource(dev, res);
@@ -743,6 +745,7 @@ static const struct of_device_id spi_qup_dt_match[] = {
 	{ .compatible = "qcom,spi-qup-v1.1.1", },
 	{ .compatible = "qcom,spi-qup-v2.1.1", },
 	{ .compatible = "qcom,spi-qup-v2.2.1", },
+    { .compatible = "qcom,spi-qup-v2",},
 	{ }
 };
 MODULE_DEVICE_TABLE(of, spi_qup_dt_match);

@@ -1139,3 +1139,13 @@ endif
 source "lib/Kconfig"
 
 source "arch/arm64/mm/Kconfig"
+
+config SMARTISAN_SURABAYA
+	tristate "Smartisan surabaya device"
+	help
+	  Support Smartisan surabaya product
+
+config SMARTISAN_COLOMBO
+	tristate "Smartisan colombo device"
+	help
+	  Support Smartisan colombo product

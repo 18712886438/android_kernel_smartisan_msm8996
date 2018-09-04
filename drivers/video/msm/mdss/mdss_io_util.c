@@ -271,6 +271,16 @@ int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 				goto vreg_set_opt_mode_fail;
 			}
 			need_sleep = !regulator_is_enabled(in_vreg[i].vreg);
+			if (!strcmp(in_vreg[i].vreg_name, "ibb"))
+			{
+				need_sleep = true;
+			}
+#ifdef CONFIG_LCD_COLOMBO
+			if (!strcmp(in_vreg[i].vreg_name, "vddio"))
+			{
+				gpio_set_value(92, 1);
+			}
+#endif
 			if (in_vreg[i].pre_on_sleep && need_sleep)
 				usleep_range(in_vreg[i].pre_on_sleep * 1000,
 					in_vreg[i].pre_on_sleep * 1000);
@@ -303,7 +313,12 @@ int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 
 			if (regulator_is_enabled(in_vreg[i].vreg))
 				regulator_disable(in_vreg[i].vreg);
-
+#ifdef CONFIG_LCD_COLOMBO
+			if (!strcmp(in_vreg[i].vreg_name, "lab"))
+			{
+				gpio_set_value(92, 0);
+			}
+#endif
 			if (in_vreg[i].post_off_sleep)
 				usleep_range(in_vreg[i].post_off_sleep * 1000,
 					in_vreg[i].post_off_sleep * 1000);

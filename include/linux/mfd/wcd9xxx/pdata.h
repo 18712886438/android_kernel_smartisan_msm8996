@@ -192,6 +192,8 @@ struct wcd9xxx_pdata {
 	u32 mic_unmute_delay;
 	enum codec_variant cdc_variant;
 	u16 use_pinctrl;
+	int lineout_hph_switch;
+	int ext_pa_enable;
 };
 
 #endif

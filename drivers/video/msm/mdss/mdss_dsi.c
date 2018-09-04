@@ -26,6 +26,8 @@
 #include <linux/uaccess.h>
 #include <linux/msm-bus.h>
 #include <linux/pm_qos.h>
+#include <soc/qcom/socinfo.h>
+#include <linux/platform_data/ti-scbl.h>
 
 #include "mdss.h"
 #include "mdss_panel.h"
@@ -39,9 +41,11 @@
 
 /* Master structure to hold all the information about the DSI/panel */
 static struct mdss_dsi_data *mdss_dsi_res;
+#define GPIO_LCD_SELECT	50
 
 #define DSI_DISABLE_PC_LATENCY 100
 #define DSI_ENABLE_PC_LATENCY PM_QOS_DEFAULT_VALUE
+#define ID_SUR_LCD	50
 
 static struct pm_qos_request mdss_dsi_pm_qos_request;
 
@@ -292,8 +296,10 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 		ret = 0;
 	}
 
+#ifndef CONFIG_LCD_COLOMBO
 	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
 		pr_debug("reset disable: pinctrl not enabled\n");
+#endif
 
 	ret = msm_dss_enable_vreg(
 		ctrl_pdata->panel_power_data.vreg_config,
@@ -301,6 +307,11 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 	if (ret)
 		pr_err("%s: failed to disable vregs for %s\n",
 			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+
+#ifdef CONFIG_LCD_COLOMBO
+	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
+		pr_debug("reset disable: pinctrl not enabled\n");
+#endif
 
 end:
 	return ret;
@@ -319,6 +330,14 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
+#ifdef CONFIG_LCD_COLOMBO
+	if (pdata->panel_info.cont_splash_enabled ||
+		!pdata->panel_info.mipi.lp11_init) {
+		if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
+			pr_debug("reset enable: pinctrl not enabled\n");
+	}
+#endif
+
 	ret = msm_dss_enable_vreg(
 		ctrl_pdata->panel_power_data.vreg_config,
 		ctrl_pdata->panel_power_data.num_vreg, 1);
@@ -336,8 +355,10 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 	 */
 	if (pdata->panel_info.cont_splash_enabled ||
 		!pdata->panel_info.mipi.lp11_init) {
+#ifndef CONFIG_LCD_COLOMBO
 		if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
 			pr_debug("reset enable: pinctrl not enabled\n");
+#endif
 
 		ret = mdss_dsi_panel_reset(pdata, 1);
 		if (ret)
@@ -1620,6 +1641,8 @@ static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
 	if (!(ctrl_pdata->ctrl_state & CTRL_STATE_PANEL_INIT)) {
 		if (!pdata->panel_info.dynamic_switch_pending) {
 			ATRACE_BEGIN("dsi_panel_on");
+			scbl_set_brightness(-1);
+			pr_info("%s+:  execute initialization sequence for lcd\n", __func__);
 			ret = ctrl_pdata->on(pdata);
 			if (ret) {
 				pr_err("%s: unable to initialize the panel\n",
@@ -2799,11 +2822,28 @@ static struct device_node *mdss_dsi_pref_prim_panel(
 		struct platform_device *pdev)
 {
 	struct device_node *dsi_pan_node = NULL;
-
+	
 	pr_debug("%s:%d: Select primary panel from dt\n",
 					__func__, __LINE__);
-	dsi_pan_node = of_parse_phandle(pdev->dev.of_node,
-					"qcom,dsi-pref-prim-pan", 0);
+	printk("%s:************ID_SUR_LCD is *%d***&&&***\n", __FUNCTION__, gpio_get_value(ID_SUR_LCD));
+	if(!(of_machine_is_compatible("qcom,surabaya"))){	//if the phone is t3l
+		if(gpio_get_value(ID_SUR_LCD) == 0){
+			dsi_pan_node = of_parse_phandle(pdev->dev.of_node,
+								"qcom,dsi-pref-prim-panA", 0);
+		}else{
+			dsi_pan_node = of_parse_phandle(pdev->dev.of_node,
+								"qcom,dsi-pref-prim-panB", 0);
+		}
+	}else if(of_board_is_surabaya_p1()){//if the phone is t3 p1
+		dsi_pan_node = of_parse_phandle(pdev->dev.of_node,
+							"qcom,dsi-pref-prim-panA", 0);
+	}else if(1){		//if the phone is t3 p2 and the gpio is low	
+		dsi_pan_node = of_parse_phandle(pdev->dev.of_node,
+							"qcom,dsi-pref-prim-panB", 0);
+	}else{//if the phone is t3 p2 and the gpio is high
+		dsi_pan_node = of_parse_phandle(pdev->dev.of_node,
+							"qcom,dsi-pref-prim-panC", 0);
+	}
 	if (!dsi_pan_node)
 		pr_err("%s:can't find panel phandle\n", __func__);
 
@@ -2845,6 +2885,7 @@ static struct device_node *mdss_dsi_find_panel_of_node(
 			 __func__, __LINE__);
 		goto end;
 	} else {
+		goto end;
 		/* check if any override parameters are set */
 		pinfo->sim_panel_mode = 0;
 		override_cfg = strnstr(panel_cfg, "#" OVERRIDE_CFG, len);
@@ -3639,7 +3680,11 @@ static int mdss_dsi_parse_hw_cfg(struct platform_device *pdev, char *pan_cfg)
 
 		if (!strcmp(data, "dual_dsi"))
 			sdata->hw_config = DUAL_DSI;
-		else if (!strcmp(data, "split_dsi"))
+#ifdef CONFIG_LCD_COLOMBO
+		else if (gpio_get_value(ID_SUR_LCD) != 0)//(!strcmp(data, "split_dsi"))
+#else
+		else if(!strcmp(data, "split_dsi"))
+#endif
 			sdata->hw_config = SPLIT_DSI;
 		else if (!strcmp(data, "single_dsi"))
 			sdata->hw_config = SINGLE_DSI;

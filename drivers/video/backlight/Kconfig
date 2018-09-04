@@ -15,7 +15,7 @@ if BACKLIGHT_LCD_SUPPORT
 #
 config LCD_CLASS_DEVICE
         tristate "Lowlevel LCD controls"
-	default m
+	default y
 	help
 	  This framework adds support for low-level control of LCD.
 	  Some framebuffer devices connect to platform-specific LCD modules
@@ -155,7 +155,7 @@ endif # LCD_CLASS_DEVICE
 #
 config BACKLIGHT_CLASS_DEVICE
         tristate "Lowlevel Backlight controls"
-	default m
+	default y
 	help
 	  This framework adds support for low-level control of the LCD
           backlight. This includes support for brightness and power.
@@ -195,6 +195,10 @@ config BACKLIGHT_GENERIC
 	  Say y to enable the generic platform backlight driver previously
 	  known as the Corgi backlight driver. If you have a Sharp Zaurus
 	  SL-C7xx, SL-Cxx00 or SL-6000x say y.
+
+config BACKLIGHT_LM36923
+	tristate "Colombo Backlight Driver"
+	default y
 
 config BACKLIGHT_IPAQ_MICRO
 	tristate "iPAQ microcontroller backlight driver"
