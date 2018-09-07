@@ -410,7 +410,6 @@
 			qcom,timing-db-mode;
 			oled-vdda-supply = <&pm8994_l19>;
 			vddio-supply = <&pm8994_l14>;
-			vddh-supply = <&pm8994_l22>;
 			lab-supply = <&lab_regulator>;
 			ibb-supply = <&ibb_regulator>;
 			qcom,mdss-mdp = <&mdss_mdp>;

@@ -1055,6 +1055,7 @@
 			};
 		};
 
+#ifndef CONFIG_VENDOR_SMARTISAN_COLOMBO
 		pmx_nfc_reset {
 			nfc_disable_active: active {
 				mux {
@@ -1082,6 +1083,7 @@
 				};
 			};
 		};
+#endif
 
 		spi_0 {
 			spi_0_active: spi_0_active {
@@ -1143,38 +1145,6 @@
 			};
 		};
 
-		spi_9 {
-			spi_9_active: spi_9_active {
-				mux {
-					pins = "gpio49", "gpio50", "gpio51",
-								"gpio52";
-					function = "blsp_spi9";
-				};
-
-				config {
-					pins = "gpio49", "gpio50", "gpio51",
-								"gpio52";
-					drive-strength = <6>;
-					bias-disable;
-				};
-			};
-
-			spi_9_sleep: spi_9_sleep {
-				mux {
-					pins = "gpio49", "gpio50", "gpio51",
-								"gpio52";
-					function = "blsp_spi9";
-				};
-
-				config {
-					pins = "gpio49", "gpio50", "gpio51",
-								"gpio52";
-					drive-strength = <6>;
-					bias-disable;
-				};
-			};
-		};
-
 		spi_10 {
 			spi_10_active: spi_10_active {
 				mux {
@@ -1207,8 +1177,8 @@
 			};
 		};
 
-		spi_12 {
-			spi_12_active: spi_12_active {
+		spi_11 {
+			spi_11_active: spi_11_active {
 				mux {
 					pins = "gpio85", "gpio86", "gpio87",
 								"gpio88";
@@ -1223,7 +1193,7 @@
 				};
 			};
 
-			spi_12_sleep: spi_12_sleep {
+			spi_11_sleep: spi_11_sleep {
 				mux {
 					pins = "gpio85", "gpio86", "gpio87",
 								"gpio88";
@@ -2601,6 +2571,7 @@
 			};
 		};
 
+#ifndef CONFIG_VENDOR_SMARTISAN
 		seta_15: seta_15 {
 			mux {
 				pins = "gpio86";
@@ -2613,6 +2584,7 @@
 				bias-disable;
 			};
 		};
+#endif
 
 		seta_16: seta_16 {
 			mux {
@@ -2848,6 +2820,7 @@
 			};
 		};
 
+#ifndef CONFIG_VENDOR_SMARTISAN
 		setb_16: setb_16 {
 			mux {
 				pins = "gpio92";
@@ -2860,6 +2833,7 @@
 				bias-disable;
 			};
 		};
+#endif
 
 		setb_17: setb_17 {
 			mux {
@@ -2931,6 +2905,7 @@
 		};
 
 		tsif1_signals_active: tsif1_signals_active {
+#ifndef CONFIG_VENDOR_SMARTISAN
 			tsif2_clk {
 				pins = "gpio93"; /* TSIF1 CLK */
 				function = "tsif2_clk";
@@ -2948,6 +2923,7 @@
 				drive_strength = <2>;	/* 2 mA */
 				bias-pull-down;		/* pull down */
 			};
+#endif
 		};
 
 		/* sync signal is only used if configured to mode-2 */
