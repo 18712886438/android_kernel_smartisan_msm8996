@@ -85,9 +85,9 @@
 	qcom,pcie-phy-ver = <3>;
 };
 
-&pcie1 {
-	qcom,pcie-phy-ver = <3>;
-};
+//&pcie1 {
+//	qcom,pcie-phy-ver = <3>;
+//};
 
 &pcie2 {
 	qcom,pcie-phy-ver = <3>;
