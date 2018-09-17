@@ -4814,7 +4814,7 @@ static bool is_usbin_uv_high(struct smbchg_chip *chip)
 #define DEFAULT_DETECT_MS   5000
 static void handle_usb_insertion(struct smbchg_chip *chip)
 {
-	struct power_supply *parallel_psy = get_parallel_psy(chip);
+	//struct power_supply *parallel_psy = get_parallel_psy(chip);
 	enum power_supply_type usb_supply_type;
 	int rc;
 	char *usb_type_name = "null";

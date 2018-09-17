@@ -743,6 +743,7 @@ static const struct of_device_id spi_qup_dt_match[] = {
 	{ .compatible = "qcom,spi-qup-v1.1.1", },
 	{ .compatible = "qcom,spi-qup-v2.1.1", },
 	{ .compatible = "qcom,spi-qup-v2.2.1", },
+    { .compatible = "qcom,spi-qup-v2",},
 	{ }
 };
 MODULE_DEVICE_TABLE(of, spi_qup_dt_match);
