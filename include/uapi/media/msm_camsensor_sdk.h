@@ -45,7 +45,7 @@
 
 #define MAX_LED_TRIGGERS          3
 
-#define MSM_EEPROM_MEMORY_MAP_MAX_SIZE  300
+#define MSM_EEPROM_MEMORY_MAP_MAX_SIZE  80
 #define MSM_EEPROM_MAX_MEM_MAP_CNT      8
 
 enum msm_sensor_camera_id_t {
@@ -53,9 +53,6 @@ enum msm_sensor_camera_id_t {
 	CAMERA_1,
 	CAMERA_2,
 	CAMERA_3,
-	CAMERA_4,
-	CAMERA_5,
-	CAMERA_6,
 	MAX_CAMERAS,
 };
 
@@ -64,7 +61,6 @@ enum i2c_freq_mode_t {
 	I2C_FAST_MODE,
 	I2C_CUSTOM_MODE,
 	I2C_FAST_PLUS_MODE,
-	I2C_OIS_MODE,
 	I2C_MAX_MODES,
 };
 
@@ -94,7 +90,6 @@ enum msm_camera_i2c_data_type {
 	MSM_CAMERA_I2C_BYTE_DATA = 1,
 	MSM_CAMERA_I2C_WORD_DATA,
 	MSM_CAMERA_I2C_DWORD_DATA,
-	MSM_CAMERA_I2C_SEQ_DATA,
 	MSM_CAMERA_I2C_SET_BYTE_MASK,
 	MSM_CAMERA_I2C_UNSET_BYTE_MASK,
 	MSM_CAMERA_I2C_SET_WORD_MASK,
@@ -110,12 +105,10 @@ enum msm_sensor_power_seq_gpio_t {
 	SENSOR_GPIO_VIO,
 	SENSOR_GPIO_VANA,
 	SENSOR_GPIO_VDIG,
-	SENSOR_SHARED_GPIO_VDIG,
 	SENSOR_GPIO_VAF,
 	SENSOR_GPIO_FL_EN,
 	SENSOR_GPIO_FL_NOW,
 	SENSOR_GPIO_FL_RESET,
-    	SENSOR_GPIO_XSHUT,
 	SENSOR_GPIO_CUSTOM1,
 	SENSOR_GPIO_CUSTOM2,
 	SENSOR_GPIO_MAX,
@@ -297,7 +290,6 @@ struct msm_camera_sensor_slave_info {
 	char eeprom_name[32];
 	char actuator_name[32];
 	char ois_name[32];
-    char tof_name[32];
 	char flash_name[32];
 	enum msm_sensor_camera_id_t camera_id;
 	unsigned short slave_addr;

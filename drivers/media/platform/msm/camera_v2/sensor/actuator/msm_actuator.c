@@ -27,8 +27,8 @@ DEFINE_MSM_MUTEX(msm_actuator_mutex);
 #endif
 
 #define PARK_LENS_LONG_STEP 7
-#define PARK_LENS_MID_STEP 4
-#define PARK_LENS_SMALL_STEP 2
+#define PARK_LENS_MID_STEP 5
+#define PARK_LENS_SMALL_STEP 3
 #define MAX_QVALUE 4096
 
 static struct v4l2_file_operations msm_actuator_v4l2_subdev_fops;
@@ -812,7 +812,7 @@ static int32_t msm_actuator_bivcm_move_focus(
 static int32_t msm_actuator_park_lens(struct msm_actuator_ctrl_t *a_ctrl)
 {
 	int32_t rc = 0;
-	int16_t next_lens_pos = 0;
+	uint16_t next_lens_pos = 0;
 	struct msm_camera_i2c_reg_setting reg_setting;
 
 	a_ctrl->i2c_tbl_index = 0;
@@ -830,97 +830,49 @@ static int32_t msm_actuator_park_lens(struct msm_actuator_ctrl_t *a_ctrl)
 	if (a_ctrl->park_lens.max_step > a_ctrl->max_code_size)
 		a_ctrl->park_lens.max_step = a_ctrl->max_code_size;
 
-	next_lens_pos = (int16_t)a_ctrl->step_position_table[a_ctrl->curr_step_pos];
-        if (next_lens_pos >= 0) { 
-		while (next_lens_pos) {
-			/* conditions which help to reduce park lens time */
-			if (next_lens_pos > (a_ctrl->park_lens.max_step *
-				PARK_LENS_LONG_STEP)) {
-				next_lens_pos = next_lens_pos -
-					(a_ctrl->park_lens.max_step *
-					PARK_LENS_LONG_STEP);
-			} else if (next_lens_pos > (a_ctrl->park_lens.max_step *
-				PARK_LENS_MID_STEP)) {
-				next_lens_pos = next_lens_pos -
-					(a_ctrl->park_lens.max_step *
-					PARK_LENS_MID_STEP);
-			} else if (next_lens_pos > (a_ctrl->park_lens.max_step *
-				PARK_LENS_SMALL_STEP)) {
-				next_lens_pos = next_lens_pos -
-					(a_ctrl->park_lens.max_step *
-					PARK_LENS_SMALL_STEP);
-			} else {
-				next_lens_pos = (next_lens_pos >
-					a_ctrl->park_lens.max_step) ?
-					(next_lens_pos - a_ctrl->park_lens.
-					max_step) : 0;
-			}
-			CDBG("next_lens_pos = %d\n",next_lens_pos);
-			a_ctrl->func_tbl->actuator_parse_i2c_params(a_ctrl,
-				next_lens_pos, a_ctrl->park_lens.hw_params,
-				a_ctrl->park_lens.damping_delay);
-
-			reg_setting.reg_setting = a_ctrl->i2c_reg_tbl;
-			reg_setting.size = a_ctrl->i2c_tbl_index;
-			reg_setting.data_type = a_ctrl->i2c_data_type;
-
-			rc = a_ctrl->i2c_client.i2c_func_tbl->
-				i2c_write_table_w_microdelay(
-				&a_ctrl->i2c_client, &reg_setting);
-			if (rc < 0) {
-				pr_err("%s Failed I2C write Line %d\n",
-					__func__, __LINE__);
-				return rc;
-			}
-			a_ctrl->i2c_tbl_index = 0;
-			/* Use typical damping time delay to avoid tick sound */
-			usleep_range(10000, 12000);
+	next_lens_pos = a_ctrl->step_position_table[a_ctrl->curr_step_pos];
+	while (next_lens_pos) {
+		/* conditions which help to reduce park lens time */
+		if (next_lens_pos > (a_ctrl->park_lens.max_step *
+			PARK_LENS_LONG_STEP)) {
+			next_lens_pos = next_lens_pos -
+				(a_ctrl->park_lens.max_step *
+				PARK_LENS_LONG_STEP);
+		} else if (next_lens_pos > (a_ctrl->park_lens.max_step *
+			PARK_LENS_MID_STEP)) {
+			next_lens_pos = next_lens_pos -
+				(a_ctrl->park_lens.max_step *
+				PARK_LENS_MID_STEP);
+		} else if (next_lens_pos > (a_ctrl->park_lens.max_step *
+			PARK_LENS_SMALL_STEP)) {
+			next_lens_pos = next_lens_pos -
+				(a_ctrl->park_lens.max_step *
+				PARK_LENS_SMALL_STEP);
+		} else {
+			next_lens_pos = (next_lens_pos >
+				a_ctrl->park_lens.max_step) ?
+				(next_lens_pos - a_ctrl->park_lens.
+				max_step) : 0;
 		}
-	} else {
-		while (next_lens_pos) {
-			/* conditions which help to reduce park lens time */
-			if ((-next_lens_pos) > (a_ctrl->park_lens.max_step *
-				PARK_LENS_LONG_STEP)) {
-				next_lens_pos = next_lens_pos +
-					(a_ctrl->park_lens.max_step *
-					PARK_LENS_LONG_STEP);
-			} else if ((-next_lens_pos) > (a_ctrl->park_lens.max_step *
-				PARK_LENS_MID_STEP)) {
-				next_lens_pos = next_lens_pos +
-					(a_ctrl->park_lens.max_step *
-					PARK_LENS_MID_STEP);
-			} else if ((-next_lens_pos) > (a_ctrl->park_lens.max_step *
-				PARK_LENS_SMALL_STEP)) {
-				next_lens_pos = next_lens_pos +
-					(a_ctrl->park_lens.max_step *
-					PARK_LENS_SMALL_STEP);
-			} else {
-				next_lens_pos = ((-next_lens_pos) >
-					a_ctrl->park_lens.max_step) ?
-					(next_lens_pos + a_ctrl->park_lens.
-					max_step) : 0;
-			}
-			CDBG("next_lens_pos = %d\n",next_lens_pos);
-			a_ctrl->func_tbl->actuator_parse_i2c_params(a_ctrl,
-				next_lens_pos, a_ctrl->park_lens.hw_params,
-				a_ctrl->park_lens.damping_delay);
+		a_ctrl->func_tbl->actuator_parse_i2c_params(a_ctrl,
+			next_lens_pos, a_ctrl->park_lens.hw_params,
+			a_ctrl->park_lens.damping_delay);
 
-			reg_setting.reg_setting = a_ctrl->i2c_reg_tbl;
-			reg_setting.size = a_ctrl->i2c_tbl_index;
-			reg_setting.data_type = a_ctrl->i2c_data_type;
+		reg_setting.reg_setting = a_ctrl->i2c_reg_tbl;
+		reg_setting.size = a_ctrl->i2c_tbl_index;
+		reg_setting.data_type = a_ctrl->i2c_data_type;
 
-			rc = a_ctrl->i2c_client.i2c_func_tbl->
-				i2c_write_table_w_microdelay(
-				&a_ctrl->i2c_client, &reg_setting);
-			if (rc < 0) {
-				pr_err("%s Failed I2C write Line %d\n",
-					__func__, __LINE__);
-				return rc;
-			}
-			a_ctrl->i2c_tbl_index = 0;
-			/* Use typical damping time delay to avoid tick sound */
-			usleep_range(10000, 12000);
+		rc = a_ctrl->i2c_client.i2c_func_tbl->
+			i2c_write_table_w_microdelay(
+			&a_ctrl->i2c_client, &reg_setting);
+		if (rc < 0) {
+			pr_err("%s Failed I2C write Line %d\n",
+				__func__, __LINE__);
+			return rc;
 		}
+		a_ctrl->i2c_tbl_index = 0;
+		/* Use typical damping time delay to avoid tick sound */
+		usleep_range(10000, 12000);
 	}
 
 	return 0;
@@ -1019,7 +971,7 @@ static int32_t msm_actuator_init_step_table(struct msm_actuator_ctrl_t *a_ctrl,
 	int16_t cur_code = 0;
 	uint16_t step_index = 0, region_index = 0;
 	uint16_t step_boundary = 0;
-	int32_t max_code_size = 1;
+	uint32_t max_code_size = 1;
 	uint16_t data_size = set_info->actuator_params.data_size;
 	CDBG("Enter\n");
 
@@ -1966,8 +1918,6 @@ probe_failure:
 static int32_t msm_actuator_platform_probe(struct platform_device *pdev)
 {
 	int32_t rc = 0;
-	uint8_t chip_id;
-	uint32_t sid, chip_id_u32;
 	struct msm_camera_cci_client *cci_client = NULL;
 	struct msm_actuator_ctrl_t *msm_actuator_t = NULL;
 	struct msm_actuator_vreg *vreg_cfg;
@@ -1984,16 +1934,6 @@ static int32_t msm_actuator_platform_probe(struct platform_device *pdev)
 		pr_err("%s:%d failed no memory\n", __func__, __LINE__);
 		return -ENOMEM;
 	}
-
- 	msm_actuator_t->i2c_client.cci_client = kzalloc(sizeof(
-		struct msm_camera_cci_client), GFP_KERNEL);
-	if (!msm_actuator_t->i2c_client.cci_client) {
-		kfree(msm_actuator_t->vreg_cfg.cam_vreg);
-		kfree(msm_actuator_t);
-		pr_err("failed no memory\n");
-		return -ENOMEM;
-	}
-
 	rc = of_property_read_u32((&pdev->dev)->of_node, "cell-index",
 		&pdev->id);
 	CDBG("cell-index %d, rc %d\n", pdev->id, rc);
@@ -2011,37 +1951,6 @@ static int32_t msm_actuator_platform_probe(struct platform_device *pdev)
 		pr_err("failed rc %d\n", rc);
 		return rc;
 	}
-
-	rc = of_property_read_u32((&pdev->dev)->of_node, "qcom,cci-sid",
-		&sid);
-	msm_actuator_t->i2c_client.cci_client->sid = (uint8_t)sid;
-	CDBG("qcom,cci-sid 0x%x, rc %d\n", msm_actuator_t->i2c_client.cci_client->sid, rc);
-	if (rc < 0) {
-		kfree(msm_actuator_t);
-		pr_err("failed rc %d\n", rc);
-		return rc;
-	}
-
-	rc = of_property_read_u32((&pdev->dev)->of_node, "qcom,chip-id",
-		&chip_id_u32);
-	msm_actuator_t->chip_id = (uint8_t)chip_id_u32;
-	CDBG("qcom,chip-id 0x%x, rc %d\n", msm_actuator_t->chip_id, rc);
-	if (rc < 0) {
-		kfree(msm_actuator_t);
-		pr_err("failed rc %d\n", rc);
-		return rc;
-	}
-
-	rc = of_property_read_u32((&pdev->dev)->of_node, "qcom,chip-id-addr",
-		&msm_actuator_t->chip_id_addr);
-	CDBG("qcom,chip-id-addr 0x%x, rc %d\n", msm_actuator_t->chip_id_addr, rc);
-	if (rc < 0) {
-		kfree(msm_actuator_t);
-		pr_err("failed rc %d\n", rc);
-		return rc;
-	}
-
-
 
 	if (of_find_property((&pdev->dev)->of_node,
 			"qcom,cam-vreg-name", NULL)) {
@@ -2078,7 +1987,6 @@ static int32_t msm_actuator_platform_probe(struct platform_device *pdev)
 	/* Set device type as platform device */
 	msm_actuator_t->act_device_type = MSM_CAMERA_PLATFORM_DEVICE;
 	msm_actuator_t->i2c_client.i2c_func_tbl = &msm_sensor_cci_func_tbl;
-#if 0
 	msm_actuator_t->i2c_client.cci_client = kzalloc(sizeof(
 		struct msm_camera_cci_client), GFP_KERNEL);
 	if (!msm_actuator_t->i2c_client.cci_client) {
@@ -2087,53 +1995,11 @@ static int32_t msm_actuator_platform_probe(struct platform_device *pdev)
 		pr_err("failed no memory\n");
 		return -ENOMEM;
 	}
-#endif
 
 	cci_client = msm_actuator_t->i2c_client.cci_client;
 	cci_client->cci_subdev = msm_cci_get_subdev();
 	cci_client->cci_i2c_master = msm_actuator_t->cci_master;
-        rc = msm_actuator_vreg_control(msm_actuator_t, 1);
-	if (rc < 0) {
-		pr_err("%s failed %d\n", __func__, __LINE__);
-		return rc;
-	}
-
-	/* VREG needs some delay to power up */
-	usleep_range(5000, 6000);
-
-	rc = msm_actuator_t->i2c_client.i2c_func_tbl->i2c_util(
-		&msm_actuator_t->i2c_client, MSM_CCI_INIT);
-	if (rc < 0) {
-		pr_err("cci_init failed\n");
-		rc = -1;
-		goto ERROR2;
-	}
-	
-	msm_actuator_t->i2c_client.cci_client->retries = 3;
-	msm_actuator_t->i2c_client.cci_client->id_map = 0;
-	msm_actuator_t->i2c_client.cci_client->cci_i2c_master = msm_actuator_t->cci_master;
-	msm_actuator_t->i2c_client.cci_client->i2c_freq_mode = I2C_STANDARD_MODE;
-	msm_actuator_t->i2c_data_type = MSM_CAMERA_I2C_WORD_DATA;
-
-	msm_actuator_t->i2c_client.addr_type = MSM_CAMERA_I2C_BYTE_ADDR;
-	rc = msm_actuator_t->i2c_client.i2c_func_tbl->i2c_read_seq(
-				&msm_actuator_t->i2c_client,
-				msm_actuator_t->chip_id_addr,
-				&chip_id, 1);
-	if (rc < 0) {
-		pr_err("i2c read error:%d\n", rc);
-		rc = -1;
-		goto ERROR1;
-	}
-
-	if (chip_id != msm_actuator_t->chip_id)  {
-		pr_err("Chip id not match, probe error"); 
-			rc = -1;
-		goto ERROR1;
-	}
-
-
-        v4l2_subdev_init(&msm_actuator_t->msm_sd.sd,
+	v4l2_subdev_init(&msm_actuator_t->msm_sd.sd,
 		msm_actuator_t->act_v4l2_subdev_ops);
 	v4l2_set_subdevdata(&msm_actuator_t->msm_sd.sd, msm_actuator_t);
 	msm_actuator_t->msm_sd.sd.internal_ops = &msm_actuator_internal_ops;
@@ -2153,18 +2019,6 @@ static int32_t msm_actuator_platform_probe(struct platform_device *pdev)
 #endif
 	msm_actuator_t->msm_sd.sd.devnode->fops =
 		&msm_actuator_v4l2_subdev_fops;
-
-ERROR1:
-	rc = msm_actuator_t->i2c_client.i2c_func_tbl->i2c_util(
-		&msm_actuator_t->i2c_client, MSM_CCI_RELEASE);
-	if (rc < 0)
-		pr_err("cci_release failed\n");
-ERROR2:
-	rc = msm_actuator_vreg_control(msm_actuator_t, 0);
-	if (rc < 0) {
-		pr_err("%s failed %d\n", __func__, __LINE__);
-		return rc;
-	}
 
 	CDBG("Exit\n");
 	return rc;

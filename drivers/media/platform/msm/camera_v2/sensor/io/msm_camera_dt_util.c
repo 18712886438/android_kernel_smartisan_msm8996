@@ -695,90 +695,6 @@ ERROR1:
 	return rc;
 }
 
-int msm_camera_get_dt_shared_gpio_req_tbl(struct device_node *of_node,
-	struct msm_camera_gpio_conf *gconf, uint16_t *gpio_array,
-	uint16_t gpio_array_size)
-{
-	int rc = 0, i = 0;
-	uint32_t count = 0;
-	uint32_t *val_array = NULL;
-
-	if (!of_get_property(of_node, "qcom,shared-gpio-req-tbl-num", &count))
-		return 0;
-
-	count /= sizeof(uint32_t);
-	if (!count) {
-		pr_err("%s qcom,shared-gpio-req-tbl-num 0\n", __func__);
-		return 0;
-	}
-
-	val_array = kzalloc(sizeof(uint32_t) * count, GFP_KERNEL);
-	if (!val_array) {
-		pr_err("%s failed %d\n", __func__, __LINE__);
-		return -ENOMEM;
-	}
-
-	gconf->cam_gpio_req_tbl = kzalloc(sizeof(struct gpio) * count,
-		GFP_KERNEL);
-	if (!gconf->cam_gpio_req_tbl) {
-		pr_err("%s failed %d\n", __func__, __LINE__);
-		rc = -ENOMEM;
-		goto ERROR1;
-	}
-	gconf->cam_gpio_req_tbl_size = count;
-
-	rc = of_property_read_u32_array(of_node, "qcom,shared-gpio-req-tbl-num",
-		val_array, count);
-	if (rc < 0) {
-		pr_err("%s failed %d\n", __func__, __LINE__);
-		goto ERROR2;
-	}
-	for (i = 0; i < count; i++) {
-		if (val_array[i] >= gpio_array_size) {
-			pr_err("%s gpio req tbl index %d invalid\n",
-				__func__, val_array[i]);
-			return -EINVAL;
-		}
-		gconf->cam_gpio_req_tbl[i].gpio = gpio_array[val_array[i]];
-		CDBG("%s cam_gpio_req_tbl[%d].gpio = %d\n", __func__, i,
-			gconf->cam_gpio_req_tbl[i].gpio);
-	}
-
-	rc = of_property_read_u32_array(of_node, "qcom,shared-gpio-req-tbl-flags",
-		val_array, count);
-	if (rc < 0) {
-		pr_err("%s failed %d\n", __func__, __LINE__);
-		goto ERROR2;
-	}
-	for (i = 0; i < count; i++) {
-		gconf->cam_gpio_req_tbl[i].flags = val_array[i];
-		CDBG("%s cam_gpio_req_tbl[%d].flags = %ld\n", __func__, i,
-			gconf->cam_gpio_req_tbl[i].flags);
-	}
-
-	for (i = 0; i < count; i++) {
-		rc = of_property_read_string_index(of_node,
-			"qcom,shared-gpio-req-tbl-label", i,
-			&gconf->cam_gpio_req_tbl[i].label);
-		CDBG("%s cam_gpio_req_tbl[%d].label = %s\n", __func__, i,
-			gconf->cam_gpio_req_tbl[i].label);
-		if (rc < 0) {
-			pr_err("%s failed %d\n", __func__, __LINE__);
-			goto ERROR2;
-		}
-	}
-
-	kfree(val_array);
-	return rc;
-
-ERROR2:
-	kfree(gconf->cam_gpio_req_tbl);
-ERROR1:
-	kfree(val_array);
-	gconf->cam_gpio_req_tbl_size = 0;
-	return rc;
-}
-
 int msm_camera_get_dt_gpio_req_tbl(struct device_node *of_node,
 	struct msm_camera_gpio_conf *gconf, uint16_t *gpio_array,
 	uint16_t gpio_array_size)
@@ -860,48 +776,6 @@ ERROR2:
 ERROR1:
 	kfree(val_array);
 	gconf->cam_gpio_req_tbl_size = 0;
-	return rc;
-}
-
-int msm_camera_init_shared_gpio_pin_tbl(struct device_node *of_node,
-	struct msm_camera_gpio_conf *gconf, uint16_t *gpio_array,
-	uint16_t gpio_array_size)
-{
-	int rc = 0, val = 0;
-
-	gconf->gpio_num_info = kzalloc(sizeof(struct msm_camera_gpio_num_info),
-		GFP_KERNEL);
-	if (!gconf->gpio_num_info) {
-		pr_err("%s failed %d\n", __func__, __LINE__);
-		rc = -ENOMEM;
-		return rc;
-	}
-
-	rc = of_property_read_u32(of_node, "qcom,shared-gpio-vdig", &val);
-	if (rc != -EINVAL) {
-		if (rc < 0) {
-			pr_err("%s:%d read qcom,shared-gpio-vdig failed rc %d\n",
-				__func__, __LINE__, rc);
-			goto ERROR;
-		} else if (val >= gpio_array_size) {
-			pr_err("%s:%d qcom,shared-gpio-vdig invalid %d\n",
-				__func__, __LINE__, val);
-			rc = -EINVAL;
-			goto ERROR;
-		}
-		gconf->gpio_num_info->gpio_num[SENSOR_SHARED_GPIO_VDIG] =
-			gpio_array[val];
-		gconf->gpio_num_info->valid[SENSOR_SHARED_GPIO_VDIG] = 1;
-		CDBG("%s qcom,shared-gpio-vdig %d\n", __func__,
-			gconf->gpio_num_info->gpio_num[SENSOR_SHARED_GPIO_VDIG]);
-	} else {
-		rc = 0;
-	}
-	return rc;
-
-ERROR:
-	kfree(gconf->gpio_num_info);
-	gconf->gpio_num_info = NULL;
 	return rc;
 }
 
@@ -1045,27 +919,6 @@ int msm_camera_init_gpio_pin_tbl(struct device_node *of_node,
 		gconf->gpio_num_info->valid[SENSOR_GPIO_VDIG] = 1;
 		CDBG("%s qcom,gpio-vdig %d\n", __func__,
 			gconf->gpio_num_info->gpio_num[SENSOR_GPIO_VDIG]);
-	} else {
-		rc = 0;
-	}
-
-        rc = of_property_read_u32(of_node, "qcom,gpio-xshut", &val);
-	if (rc != -EINVAL) {
-		if (rc < 0) {
-			pr_err("%s:%d read qcom,gpio-xshut failed rc %d\n",
-				__func__, __LINE__, rc);
-			goto ERROR;
-		} else if (val >= gpio_array_size) {
-			pr_err("%s:%d qcom,gpio-xshut invalid %d\n",
-				__func__, __LINE__, val);
-			rc = -EINVAL;
-			goto ERROR;
-		}
-		gconf->gpio_num_info->gpio_num[SENSOR_GPIO_XSHUT] =
-			gpio_array[val];
-		gconf->gpio_num_info->valid[SENSOR_GPIO_XSHUT] = 1;
-		CDBG("%s qcom,gpio-xshut %d\n", __func__,
-			gconf->gpio_num_info->gpio_num[SENSOR_GPIO_XSHUT]);
 	} else {
 		rc = 0;
 	}
