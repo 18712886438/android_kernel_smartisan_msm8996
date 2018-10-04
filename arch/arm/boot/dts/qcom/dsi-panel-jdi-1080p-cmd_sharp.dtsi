@@ -90,7 +90,7 @@
 			AE 44 37 00 5D 55 39 46 5B 03 04 00
 		];
 
-		qcom,mdss-dsi-panel-timings-8996 = [
+		qcom,mdss-dsi-panel-timings-phy-v2 = [
 			25 1F 09 0A 06 03 04 A0
 			25 1F 09 0A 06 03 04 A0
 			25 1F 09 0A 06 03 04 A0
