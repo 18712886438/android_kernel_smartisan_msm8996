@@ -42,17 +42,15 @@ static const struct v4l2_subdev_internal_ops msm_sensor_init_internal_ops;
 static int msm_sensor_wait_for_probe_done(struct msm_sensor_init_t *s_init)
 {
 	int rc;
-	int tm = 10000;
+	int tm = 100000;
 	if (s_init->module_init_status == 1) {
 		CDBG("msm_cam_get_module_init_status -2\n");
 		return 0;
 	}
 	rc = wait_event_timeout(s_init->state_wait,
 		(s_init->module_init_status == 1), msecs_to_jiffies(tm));
-	if (rc == 0) {
+	if (rc == 0)
 		pr_err("%s:%d wait timeout\n", __func__, __LINE__);
-		rc = -1;
-	}
 
 	return rc;
 }
@@ -63,7 +61,6 @@ static int32_t msm_sensor_driver_cmd(struct msm_sensor_init_t *s_init,
 {
 	int32_t                      rc = 0;
 	struct sensor_init_cfg_data *cfg = (struct sensor_init_cfg_data *)arg;
-
 	/* Validate input parameters */
 	if (!s_init || !cfg) {
 		pr_err("failed: s_init %pK cfg %pK", s_init, cfg);
@@ -88,9 +85,12 @@ static int32_t msm_sensor_driver_cmd(struct msm_sensor_init_t *s_init,
 		break;
 
 	case CFG_SINIT_PROBE_WAIT_DONE:
-		rc = msm_sensor_wait_for_probe_done(s_init);
+		msm_sensor_wait_for_probe_done(s_init);
 		break;
-
+	case CFG_SINIT_UNREGISTER:
+		pr_err("XiaYang: CFG_SINIT_UNREGISTER\n");
+		rc = msm_sensor_unregister(cfg->cfg.setting);
+		break;
 	default:
 		pr_err("default");
 		break;

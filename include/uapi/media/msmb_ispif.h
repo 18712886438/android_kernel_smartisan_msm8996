@@ -136,7 +136,6 @@ enum ispif_cfg_type_t {
 	ISPIF_RELEASE,
 	ISPIF_ENABLE_REG_DUMP,
 	ISPIF_SET_VFE_INFO,
-	ISPIF_CFG2,
 };
 
 struct ispif_cfg_data {

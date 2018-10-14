@@ -9,8 +9,8 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-#ifndef MSM_OIS_H
-#define MSM_OIS_H
+#ifndef MSM_TOF_H
+#define MSM_TOF_H
 
 #include <linux/i2c.h>
 #include <linux/gpio.h>
@@ -25,50 +25,51 @@
 #define DEFINE_MSM_MUTEX(mutexname) \
 	static struct mutex mutexname = __MUTEX_INITIALIZER(mutexname)
 
-#define	MSM_OIS_MAX_VREGS (10)
+#define	MSM_TOF_MAX_VREGS (10)
 
-struct msm_ois_ctrl_t;
+struct msm_tof_ctrl_t;
 
-enum msm_ois_state_t {
-	OIS_ENABLE_STATE,
-	OIS_OPS_ACTIVE,
-	OIS_OPS_INACTIVE,
-	OIS_DISABLE_STATE,
+enum msm_tof_state_t {
+	TOF_ENABLE_STATE,
+	TOF_OPS_ACTIVE,
+	TOF_OPS_INACTIVE,
+	TOF_DISABLE_STATE,
 };
 
-struct msm_ois_vreg {
+struct msm_tof_vreg {
 	struct camera_vreg_t *cam_vreg;
-	void *data[MSM_OIS_MAX_VREGS];
+	void *data[MSM_TOF_MAX_VREGS];
 	int num_vreg;
 };
 
-struct msm_ois_gpio {
+struct msm_tof_gpio {
 	struct msm_camera_gpio_conf *cam_gconf;
 	struct msm_pinctrl_info pinctrl_info;
 	int num_gpio;
 };
 
-struct msm_ois_ctrl_t {
+struct msm_tof_ctrl_t {
 	int shared_power_flag;
 	struct i2c_driver *i2c_driver;
 	struct platform_driver *pdriver;
 	struct platform_device *pdev;
 	struct msm_camera_i2c_client i2c_client;
-	enum msm_camera_device_type_t ois_device_type;
+	enum msm_camera_device_type_t tof_device_type;
 	struct msm_sd_subdev msm_sd;
-	struct mutex *ois_mutex;
+	struct mutex *tof_mutex;
 	enum msm_camera_i2c_data_type i2c_data_type;
 	struct v4l2_subdev sdev;
-	struct v4l2_subdev_ops *ois_v4l2_subdev_ops;
+	struct v4l2_subdev_ops *tof_v4l2_subdev_ops;
 	void *user_data;
 	uint16_t i2c_tbl_index;
 	enum cci_i2c_master_t cci_master;
 	uint32_t subdev_id;
-	enum msm_ois_state_t ois_state;
-	struct msm_ois_vreg vreg_cfg;
-	struct msm_ois_gpio gpio_cfg;
-	struct msm_ois_gpio shared_gpio_cfg;
-	struct clk *clk[2];
+	enum msm_tof_state_t tof_state;
+	struct msm_tof_vreg vreg_cfg;
+	struct msm_tof_gpio gpio_cfg;
+	struct msm_tof_gpio shared_gpio_cfg;
+	uint8_t chip_id;
+	uint32_t chip_id_addr;
 };
 
 #endif

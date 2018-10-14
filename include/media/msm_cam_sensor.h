@@ -2,7 +2,6 @@
 #define __LINUX_MSM_CAM_SENSOR_H
 
 #include <uapi/media/msm_cam_sensor.h>
-#include <uapi/media/msm_camsensor_sdk.h>
 
 #include <linux/compat.h>
 
@@ -31,6 +30,7 @@ struct msm_camera_sensor_slave_info32 {
 	char eeprom_name[32];
 	char actuator_name[32];
 	char ois_name[32];
+    char tof_name[32];
 	char flash_name[32];
 	enum msm_sensor_camera_id_t camera_id;
 	uint16_t slave_addr;
@@ -71,16 +71,6 @@ struct csid_cfg_data32 {
 		compat_uptr_t csid_params;
 		compat_uptr_t csid_testmode_params;
 	} cfg;
-};
-
-struct msm_ir_led_cfg_data_t32 {
-	enum msm_ir_led_cfg_type_t cfg_type;
-	int32_t pwm_duty_on_ns;
-	int32_t pwm_period_ns;
-};
-
-struct msm_ir_cut_cfg_data_t32 {
-	enum msm_ir_cut_cfg_type_t cfg_type;
 };
 
 struct eeprom_read_t32 {
@@ -146,8 +136,8 @@ struct msm_actuator_params_t32 {
 	uint16_t init_setting_size;
 	uint32_t i2c_addr;
 	enum i2c_freq_mode_t i2c_freq_mode;
-	enum msm_camera_i2c_reg_addr_type i2c_addr_type;
-	enum msm_camera_i2c_data_type i2c_data_type;
+	enum msm_actuator_addr_type i2c_addr_type;
+	enum msm_actuator_data_type i2c_data_type;
 	compat_uptr_t reg_tbl_params;
 	compat_uptr_t init_settings;
 	struct park_lens_data_t park_lens;
@@ -223,7 +213,30 @@ struct msm_ois_set_info_t32 {
 struct msm_ois_cfg_data32 {
 	int cfgtype;
 	union {
+		int shared_power_flag;
 		struct msm_ois_set_info_t32 set_info;
+		compat_uptr_t settings;
+	} cfg;
+};
+struct msm_tof_params_t32 {
+	uint16_t data_size;
+	uint16_t setting_size;
+	uint32_t i2c_addr;
+	enum i2c_freq_mode_t i2c_freq_mode;
+	enum msm_camera_i2c_reg_addr_type i2c_addr_type;
+	enum msm_camera_i2c_data_type i2c_data_type;
+	compat_uptr_t settings;
+};
+
+struct msm_tof_set_info_t32 {
+	struct msm_tof_params_t32 tof_params;
+};
+
+struct msm_tof_cfg_data32 {
+	int cfgtype;
+	union {
+		int shared_power_flag;
+		struct msm_tof_set_info_t32 set_info;
 		compat_uptr_t settings;
 	} cfg;
 };
@@ -264,17 +277,14 @@ struct msm_flash_cfg_data_t32 {
 #define VIDIOC_MSM_OIS_CFG32 \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 11, struct msm_ois_cfg_data32)
 
+#define VIDIOC_MSM_TOF_CFG32 \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 12, struct msm_tof_cfg_data32)
+
 #define VIDIOC_MSM_CSID_IO_CFG32 \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 5, struct csid_cfg_data32)
 
 #define VIDIOC_MSM_FLASH_CFG32 \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 13, struct msm_flash_cfg_data_t32)
-
-#define VIDIOC_MSM_IR_LED_CFG32 \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 14, struct msm_ir_led_cfg_data_t32)
-
-#define VIDIOC_MSM_IR_CUT_CFG32 \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 15, struct msm_ir_cut_cfg_data_t32)
 #endif
 
 #endif
