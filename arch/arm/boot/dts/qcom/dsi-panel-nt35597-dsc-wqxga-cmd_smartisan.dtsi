@@ -5348,14 +5348,6 @@
 			05 01 00 00 78 00 02 10 00
 		];
 
-		qcom,mdss-dsi-panel-timings-phy-v2 = [
-			23 1F 07 09 05 03 04 A0
-			23 1F 07 09 05 03 04 A0
-			23 1F 07 09 05 03 04 A0
-			23 1F 07 09 05 03 04 A0
-			23 19 08 08 05 03 04 A0
-		];
-
 		qcom,compression-mode = "dsc";
 		qcom,config-select = <&dsi_nt35597_dsc_cmd_config2>;
 
